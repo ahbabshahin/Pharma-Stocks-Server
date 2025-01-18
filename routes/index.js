@@ -8,9 +8,9 @@ const invoiceRoutes = require('./invoiceRoutes');
 const customerRoutes = require('./customerRoutes');
 
 // Combine all routes with their specific prefixes
-router.use('/auth', userRoutes);
-router.use('/stock', stockRoutes);
-router.use('/invoice', invoiceRoutes);
-router.use('/customer', customerRoutes);
+router.use('/v1/auth', userRoutes);
+router.use('/v1/stock', stockRoutes);
+router.use('/v1/invoice', invoiceRoutes);
+router.use('/v1/customer', customerRoutes);
 
 module.exports = router;
