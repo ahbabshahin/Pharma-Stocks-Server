@@ -102,7 +102,7 @@ const getAllInvoices = async (req, res) => {
 	const { page = 1, limit = 10, status, user, customer } = req.query;
 
 	const queryObject = {};
-	if (status) queryObject.status = status;
+	// if (status) queryObject.status = status;
 	if (user) queryObject.user = user;
 	if (customer) queryObject.customer = { $regex: customer, $options: 'i' }; // case-insensitive search
 
@@ -137,25 +137,47 @@ const getInvoice = async (req, res) => {
 // Update Invoice (Admin only)
 const updateInvoice = async (req, res) => {
 	const { id } = req.params;
-	const { status } = req.body; // Only update status is allowed
+	let updateFields = req.body; // Contains all fields to update
 
-	const invoice = await Invoice.findById(id);
-	if (!invoice) {
-		throw new CustomError.NotFoundError(`No invoice found with id: ${id}`);
-	}
+	try {
+		// Admin authorization
+		if (req.user.role !== 'admin') {
+			throw new CustomError.UnauthorizedError(
+				'Only admin users can update invoices'
+			);
+		}
 
-	// Admin authorization
-	if (req.user.role !== 'admin') {
-		throw new CustomError.UnauthorizedError(
-			'Only admin can update invoice status'
+		// Ensure `_id` is not updated
+		if (updateFields._id) {
+			delete updateFields._id;
+		}
+
+		// Update the invoice
+		const updatedInvoice = await Invoice.findByIdAndUpdate(
+			id,
+			updateFields, // Update with all provided fields except `_id`
+			{ new: true, runValidators: true } // Return updated document & enforce schema validation
 		);
+
+		if (!updatedInvoice) {
+			throw new CustomError.NotFoundError(
+				`No invoice found with ID: ${id}`
+			);
+		}
+
+		res.status(200).json({
+			message: 'Invoice updated successfully',
+			body: updatedInvoice,
+		});
+	} catch (error) {
+		console.error('Error updating invoice:', error);
+		res.status(500).json({
+			message: 'Server error',
+			error: error.message || 'Unknown error',
+		});
 	}
-
-	invoice.status = status;
-	await invoice.save();
-
-	res.status(200).json({ body: invoice });
 };
+
 
 // Delete Invoice
 const deleteInvoice = async (req, res) => {
