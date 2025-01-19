@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
 		required: [true, 'Username is required'],
 		unique: true,
 		minlength: [3, 'Username must be at least 3 characters long'],
+		default: undefined
 	},
 	name: {
 		type: String,
@@ -17,10 +18,10 @@ const userSchema = new mongoose.Schema({
 		type: String,
 		required: [true, 'Email is required'],
 		unique: true,
-		validate: {
-			validator: (v) => validator.isEmail(v),
-			message: (props) => `${props.value} is not a valid email`,
-		},
+		// validate: {
+		// 	validator: (v) => validator.isEmail(v),
+		// 	message: (props) => `${props.value} is not a valid email`,
+		// },
 	},
 	password: {
 		type: String,
@@ -33,5 +34,6 @@ const userSchema = new mongoose.Schema({
 		default: 'user',
 	},
 });
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);
 
-module.exports = mongoose.model('User', userSchema);
+// module.exports = mongoose.model('User', userSchema);

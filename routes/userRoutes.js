@@ -14,7 +14,7 @@ const {
 const router = express.Router();
 const { validateUser } = require('../middleware/validation');
 // Register
-router.post('/register', validateUser, registerUser);
+router.post('/register', registerUser);
 
 // Login
 router.post('/login', loginUser);
@@ -22,10 +22,11 @@ router.post('/login', loginUser);
 // Logout (Authenticated users only)
 router.get('/logout', authenticateUser, logoutUser);
 
+router.put('/update-profile', authenticateUser, updateUserProfile);
+
 router.get('/user/:userId', authenticateUser, getUser);
 
 // Update Profile (Authenticated users only)
-router.put('/update-profile', authenticateUser, updateUserProfile);
 
 // Edit Role (Admin only)
 router.put(

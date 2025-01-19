@@ -6,26 +6,35 @@ const User = require('../models/User');
 const registerUser = async (req, res) => {
 	const { name, userName, email, password } = req.body;
 
+	if (!name || !userName || !email || !password) {
+		return res.status(400).json({ message: 'All fields are required' });
+	}
+
 	try {
 		let user = await User.findOne({ email });
 		if (user) {
 			return res.status(400).json({ message: 'User already exists' });
 		}
 
+		const isFirstUser = await User.countDocuments() === 0;
+		const role = isFirstUser ? 'admin' : 'user';
+
 		const hashedPassword = await bcrypt.hash(password, 10);
-		user = new User({
+		user = await User.create({
 			name,
 			userName,
 			email,
 			password: hashedPassword,
+			role,
 		});
 
-		await user.save();
 		res.status(201).json({ message: 'User registered successfully' });
 	} catch (error) {
-		res.status(500).json({ message: 'Server error' });
+		console.error('Error registering user:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
 	}
 };
+
 
 // Login user
 const loginUser = async (req, res) => {
