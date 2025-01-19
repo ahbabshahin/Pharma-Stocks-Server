@@ -20,7 +20,7 @@ const calculateTotal = (products, discountRate) => {
 
 // Create Invoice
 const createInvoice = async (req, res) => {
-	const { products, customer, sendPDF, status, sn } = req.body;
+	const { products, customer, sendPDF, status, sn, discount } = req.body;
 	console.log('products: ', products);
 
 	if (!products || !customer) {
@@ -65,7 +65,7 @@ const createInvoice = async (req, res) => {
 		}
 
 		// Calculate total and subtotal
-		const { subtotal, total } = calculateTotal(products, 0.15);
+		const { subtotal, total } = calculateTotal(products, discount);
 
 		// Create the invoice
 		const invoice = await Invoice.create({
@@ -75,6 +75,7 @@ const createInvoice = async (req, res) => {
 			customer,
 			totalAmount: total,
 			sn,
+			discount,
 		});
 
 		// Update the customer's invoices array
