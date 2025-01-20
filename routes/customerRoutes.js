@@ -18,8 +18,8 @@ const {
 
 router
 	.route('/')
-	.post(authenticateUser, createCustomer)
-	.get(authenticateUser, authorizePermissions('admin'), getAllCustomers);
+	.post(authenticateUser, authorizePermissions('admin'),createCustomer)
+	.get(authenticateUser, getAllCustomers);
 	
 router.get('/search', authenticateUser, searchCustomers); // Add search route
 
