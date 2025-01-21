@@ -4,9 +4,9 @@ const User = require('../models/User');
 
 // Register user
 const registerUser = async (req, res) => {
-	const { name, userName, email, password } = req.body;
+	const { name, username, email, password } = req.body;
 
-	if (!name || !userName || !email || !password) {
+	if (!name || !username || !email || !password) {
 		return res.status(400).json({ message: 'All fields are required' });
 	}
 
@@ -22,7 +22,7 @@ const registerUser = async (req, res) => {
 		const hashedPassword = await bcrypt.hash(password, 10);
 		user = await User.create({
 			name,
-			userName,
+			username,
 			email,
 			password: hashedPassword,
 			role,
@@ -38,10 +38,10 @@ const registerUser = async (req, res) => {
 
 // Login user
 const loginUser = async (req, res) => {
-	const { userName, password } = req.body;
+	const { username, password } = req.body;
 
 	try {
-		const user = await User.findOne({ userName });
+		const user = await User.findOne({ username });
 		if (!user) {
 			return res.status(400).json({ message: 'Invalid credentials' });
 		}
