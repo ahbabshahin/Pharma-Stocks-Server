@@ -6,6 +6,7 @@ const {
 	updateUserProfile,
 	editUserRole,
 	getUser,
+	getAllUsers,
 } = require('../controllers/userController');
 const {
 	authenticateUser,
@@ -21,6 +22,8 @@ router.post('/login', loginUser);
 
 // Logout (Authenticated users only)
 router.get('/logout', authenticateUser, logoutUser);
+
+router.get('/all', authenticateUser, getAllUsers);
 
 router.put('/update-profile', authenticateUser, updateUserProfile);
 
