@@ -73,21 +73,45 @@ const logoutUser = (req, res) => {
 
 const getUsers = async (req, res) => {
 	try {
-		// Admin authorization (optional, if you want to restrict access)
+		// Admin authorization
 		if (req.user.role !== 'admin') {
 			throw new CustomError.UnauthorizedError(
 				'Only admin can access this resource'
 			);
 		}
 
-		// Fetch all users from the database
-		const users = await User.find().select('-password'); // Exclude passwords for security
-		res.status(200).json({ total: users.length, body: users });
+		// Get pagination parameters from query
+		const { page = 1, limit = 10 } = req.query;
+
+		// Convert strings to numbers
+		// const pageNum = parseInt(page, 10);
+		// const limitNum = parseInt(limit, 10);
+
+		// Calculate skip value
+		const skip = (page - 1) * limit;
+
+		// Fetch users with pagination
+		const users = await User.find()
+			.select('-password') // Exclude passwords for security
+			.skip(skip)
+			.limit(limit);
+
+		// Get the total count of users for metadata
+		const totalUsers = await User.countDocuments();
+
+		res.status(200).json({
+			totalUsers,
+			totalPages: Math.ceil(totalUsers / limit),
+			currentPage: page,
+			limit: limit,
+			users,
+		});
 	} catch (error) {
 		console.error('Error fetching users:', error);
 		res.status(500).json({ message: 'Server error', error });
 	}
 };
+
 
 const getUser = async (req, res) => {
 	const { userId } = req.params || req.userId; // Use userId from params or the logged-in user
