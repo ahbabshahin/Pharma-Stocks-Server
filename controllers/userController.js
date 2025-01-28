@@ -100,11 +100,11 @@ const getUsers = async (req, res) => {
 		const totalUsers = await User.countDocuments();
 
 		res.status(200).json({
-			totalUsers,
+			total:totalUsers,
 			totalPages: Math.ceil(totalUsers / limit),
-			currentPage: page,
+			page: page,
 			limit: limit,
-			users,
+			body:users,
 		});
 	} catch (error) {
 		console.error('Error fetching users:', error);
