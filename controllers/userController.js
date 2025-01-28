@@ -71,7 +71,7 @@ const logoutUser = (req, res) => {
 	res.clearCookie('accessToken').json({ message: 'Logged out successfully' });
 };
 
-const getAllUsers = async (req, res) => {
+const getUsers = async (req, res) => {
 	try {
 		// Admin authorization (optional, if you want to restrict access)
 		if (req.user.role !== 'admin') {
@@ -161,7 +161,7 @@ module.exports = {
 	registerUser,
 	loginUser,
 	logoutUser,
-	getAllUsers,
+	getUsers,
 	getUser,
 	updateUserProfile,
 	editUserRole,
