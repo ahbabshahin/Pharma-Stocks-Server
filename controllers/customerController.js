@@ -3,7 +3,7 @@ const CustomError = require('../errors');
 
 // Create a new customer
 const createCustomer = async (req, res) => {
-	const { name, contacts, address } = req.body;
+	const { name, contacts, address, sn } = req.body;
 
 	try {
 		const isContactUnique = await Customer.findOne({contacts});
@@ -12,7 +12,7 @@ const createCustomer = async (req, res) => {
 				.status(400)
 				.json({ message: 'Duplicate value for contacts' });
 		}else{
-		const customer = await Customer.create({ name, contacts, address });
+		const customer = await Customer.create({ name, contacts, address, sn });
 		res.status(201).json({
 			message: 'Customer created successfully',
 			body: customer,
