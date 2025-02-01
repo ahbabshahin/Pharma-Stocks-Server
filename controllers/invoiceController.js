@@ -99,7 +99,10 @@ const createInvoice = async (req, res) => {
 
 // Get All Invoices with Pagination and Filtering
 const getAllInvoices = async (req, res) => {
-	const { page = 1, limit = 10, status, user, customer } = req.query;
+	const { status, user, customer } = req.query;
+
+	const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+	const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
 
 	const queryObject = {};
 	// if (status) queryObject.status = status;

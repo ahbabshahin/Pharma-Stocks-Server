@@ -33,12 +33,19 @@ const getAllCustomers = async (req, res) => {
 	const { page = 1, limit = 10 } = req.query;
 
 	try {
+		const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+		const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
+
 		const customers = await Customer.find()
 			.skip((page - 1) * limit)
 			.limit(Number(limit));
 
 		const totalCustomers = await Customer.countDocuments();
-		res.status(200).json({ body: customers, total: totalCustomers, page: Number(page) });
+		res.status(200).json({
+			body: customers,
+			total: totalCustomers,
+			page: Number(page),
+		});
 	} catch (error) {
 		res.status(500).json({ message: 'Server error', error });
 	}

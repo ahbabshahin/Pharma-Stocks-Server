@@ -84,26 +84,26 @@ const getUsers = async (req, res) => {
 		const { page = 1, limit = 10 } = req.query;
 
 		// Convert strings to numbers
-		// const pageNum = parseInt(page, 10);
-		// const limitNum = parseInt(limit, 10);
+		const pageNum = parseInt(page, 10);
+		const limitNum = parseInt(limit, 10);
 
 		// Calculate skip value
-		const skip = (page - 1) * limit;
+		const skip = (pageNum - 1) * limitNum;
 
 		// Fetch users with pagination
 		const users = await User.find()
 			.select('-password') // Exclude passwords for security
 			.skip(skip)
-			.limit(limit);
+			.limit(limitNum);
 
 		// Get the total count of users for metadata
 		const totalUsers = await User.countDocuments();
 
 		res.status(200).json({
 			total:totalUsers,
-			totalPages: Math.ceil(totalUsers / limit),
-			page: page,
-			limit: limit,
+			totalPages: Math.ceil(totalUsers / limitNum),
+			page: pageNum,
+			limit: limitNum,
 			body:users,
 		});
 	} catch (error) {

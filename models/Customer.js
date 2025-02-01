@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 const customerSchema = new mongoose.Schema({
+		sn:{
+		type:String,
+	},
 	name: {
 		type: String,
 		required: [true, 'Name is required'],

@@ -21,26 +21,32 @@ const createProduct = async (req, res) => {
 
 // Get all products with pagination
 const getAllProducts = async (req, res) => {
-	const { page = 1, limit = 10 } = req.query; // Default to page 1 and limit 10
-
 	try {
-		const skip = (page - 1) * limit; // Calculate how many records to skip
-		const totalProducts = await Stock.countDocuments(); // Get total number of products
+		// Parse and validate page and limit
+		const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+		const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
+		const skip = (page - 1) * limit; // Calculate skip value
+
+		// Fetch total products and paginated products
+		const totalProducts = await Stock.countDocuments();
 		const products = await Stock.find()
 			.skip(skip)
 			.limit(limit)
-			.sort({ createdAt: -1 }); // Sort by creation date, descending
+			.sort({ _id: 1 }); // Sort by _id to ensure consistency
 
+		// Respond with paginated data
 		res.status(200).json({
 			total: totalProducts,
 			totalPages: Math.ceil(totalProducts / limit),
-			currentPage: Number(page),
+			currentPage: page,
 			body: products,
 		});
 	} catch (error) {
+		console.error('Error fetching products:', error);
 		res.status(500).json({ message: 'Server error', error });
 	}
 };
+
 
 // Get product by ID
 const getProductById = async (req, res) => {
