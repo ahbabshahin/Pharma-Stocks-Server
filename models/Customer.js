@@ -13,7 +13,7 @@ const customerSchema = new mongoose.Schema({
 	},
 	contacts: {
 		type: String,
-		required: [true, 'Phone number is required'],
+		// required: [true, 'Phone number is required'],
 		unique: true,
 	},
 	address: {
