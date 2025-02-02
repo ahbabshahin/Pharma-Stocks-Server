@@ -38,12 +38,36 @@ app.use(notFoundMiddleware);
 // Error handler
 app.use(errorHandlerMiddleware);
 
+const encodeCredentials = (username, password) => {
+	const encodedUsername = encodeURIComponent(username);
+	const encodedPassword = encodeURIComponent(password);
+
+	return { encodedUsername, encodedPassword };
+};
+
+const getMongoUri = () => {
+	const { DB_USERNAME, DB_PASSWORD, DB_CLUSTER, DB_NAME } = process.env;
+
+	if (!DB_USERNAME || !DB_PASSWORD || !DB_CLUSTER || !DB_NAME) {
+		throw new Error('Missing required database environment variables');
+	}
+
+	// Encode username and password
+	const { encodedUsername, encodedPassword } = encodeCredentials(
+		DB_USERNAME,
+		DB_PASSWORD
+	);
+
+	// Construct the MongoDB URI
+	return `mongodb+srv://${encodedUsername}:${encodedPassword}@${DB_CLUSTER}/${DB_NAME}?retryWrites=true&w=majority`;
+};
+
 // Start server
 const port = process.env.PORT || 5000;
 
 const start = async () => {
 	try {
-		await connectDB(process.env.MONGO_URI);
+		await connectDB(getMongoUri());
 		app.listen(port, console.log(`Server is listening on port: ${port}`));
 	} catch (error) {
 		console.log(error);
