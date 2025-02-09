@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
+const uniqueValidator = require('mongoose-unique-validator');
 
 const userSchema = new mongoose.Schema({
 	username: {
@@ -7,7 +8,6 @@ const userSchema = new mongoose.Schema({
 		required: [true, 'Username is required'],
 		unique: true,
 		minlength: [3, 'Username must be at least 3 characters long'],
-		default: undefined
 	},
 	name: {
 		type: String,
@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
 		required: [true, 'Email is required'],
 		unique: true,
 		// validate: {
-		// 	validator: (v) => validator.isEmail(v),
+		// 	validator: validator.isEmail,
 		// 	message: (props) => `${props.value} is not a valid email`,
 		// },
 	},
@@ -34,6 +34,8 @@ const userSchema = new mongoose.Schema({
 		default: 'user',
 	},
 });
-module.exports = mongoose.models.User || mongoose.model('User', userSchema);
 
-// module.exports = mongoose.model('User', userSchema);
+// Apply unique validation plugin
+userSchema.plugin(uniqueValidator, { message: '{PATH} must be unique' });
+
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

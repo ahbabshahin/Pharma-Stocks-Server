@@ -1,8 +1,5 @@
 const express = require('express');
 const {
-	registerUser,
-	loginUser,
-	logoutUser,
 	updateUserProfile,
 	editUserRole,
 	getUser,
@@ -14,14 +11,6 @@ const {
 } = require('../middleware/authentication');
 const router = express.Router();
 const { validateUser } = require('../middleware/validation');
-// Register
-router.post('/register', registerUser);
-
-// Login
-router.post('/login', loginUser);
-
-// Logout (Authenticated users only)
-router.get('/logout', authenticateUser, logoutUser);
 
 router.get('/all', authenticateUser, getUsers);
 
