@@ -106,7 +106,7 @@ const editUserRole = async (req, res) => {
 		user.role = role;
 		await user.save();
 
-		res.json({ message: 'Role updated successfully' });
+		res.json({ message: 'Role updated successfully', body: user });
 	} catch (error) {
 		res.status(500).json({ message: 'Server error' });
 	}
