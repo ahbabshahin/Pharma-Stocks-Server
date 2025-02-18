@@ -16,14 +16,14 @@ const { validateUser } = require('../middleware/validation');
 router.post('/', authenticateUser, authorizePermissions('admin'), createUserByAdmin)
 router.get('/all', authenticateUser, getUsers);
 
-router.put('/update-profile', authenticateUser, updateUserProfile);
+router.patch('/update-profile', authenticateUser, updateUserProfile);
 
 router.get('/user/:userId', authenticateUser, getUser);
 
 // Update Profile (Authenticated users only)
 
 // Edit Role (Admin only)
-router.put(
+router.patch(
 	'/edit-role/:userId',
 	authenticateUser,
 	authorizePermissions('admin'),
