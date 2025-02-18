@@ -42,4 +42,4 @@ const userSchema = new mongoose.Schema({
 // Apply unique validation plugin
 userSchema.plugin(uniqueValidator, { message: '{PATH} must be unique' });
 
-const User = mongoose.models.User || mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

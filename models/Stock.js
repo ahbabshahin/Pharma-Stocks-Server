@@ -41,4 +41,4 @@ stockSchema.pre('save', function (next) {
 	next();
 });
 
-module.exports = mongoose.model('Stock', stockSchema);
+module.exports = mongoose.models.Stock || mongoose.model('Stock', stockSchema);
