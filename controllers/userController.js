@@ -45,10 +45,10 @@ const getUsers = async (req, res) => {
 
 
 const getUser = async (req, res) => {
-	const { userId } = req.params || req.userId; // Use userId from params or the logged-in user
+	const { id } = req.params || req.id; // Use id from params or the logged-in user
 
 	try {
-		const user = await User.findById(userId).select('-password'); // Exclude the password field
+		const user = await User.findById(id).select('-password'); // Exclude the password field
 		if (!user) {
 			return res.status(404).json({ message: 'User not found' });
 		}
@@ -109,10 +109,10 @@ const setPasswordOnFirstLogin = async (req, res) => {
 // Update profile
 const updateUserProfile = async (req, res) => {
 	const { username, email, password, newPassword } = req.body;
-	const userId = req.user.userId;
+	const id = req.user.id;
 
 	try {
-		const user = await User.findById(userId);
+		const user = await User.findById(id);
 
 		if (username) user.username = username;
 		if (email) user.email = email;
@@ -136,11 +136,11 @@ const updateUserProfile = async (req, res) => {
 
 // Edit user role (admin only)
 const editUserRole = async (req, res) => {
-	const { userId } = req.params;
+	const { id } = req.params;
 	const { role } = req.body;
 
 	try {
-		const user = await User.findById(userId);
+		const user = await User.findById(id);
 		if (!user) {
 			return res.status(404).json({ message: 'User not found' });
 		}
@@ -148,13 +148,49 @@ const editUserRole = async (req, res) => {
 		if (!['admin', 'user'].includes(role)) {
 			return res.status(400).json({ message: 'Invalid role' });
 		}
-
+		if (req.user.id === id) {
+			return res
+				.status(400)
+				.json({ message: 'Admins cannot edit their role' });
+		}
 		user.role = role;
 		await user.save();
 
 		res.json({ message: 'Role updated successfully', body: user });
 	} catch (error) {
 		res.status(500).json({ message: 'Server error' });
+	}
+};
+
+const deleteUser = async (req, res) => {
+	try {
+		// Ensure only admin can delete users
+		if (req.user.role !== 'admin') {
+			return res
+				.status(403)
+				.json({ message: 'Only admins can delete users' });
+		}
+
+		const { id } = req.params;
+
+		// Check if the user exists
+		const user = await User.findById(id);
+		if (!user) {
+			return res.status(404).json({ message: 'User not found' });
+		}
+
+		// Prevent admin from deleting themselves (optional)
+		if (req.user.id === id) {
+			return res
+				.status(400)
+				.json({ message: 'Admins cannot delete themselves' });
+		}
+
+		await User.findByIdAndDelete(id);
+		res.status(200).json({ message: 'User deleted successfully' });
+	} catch (error) {
+		console.error('Error deleting user:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
 	}
 };
 
@@ -165,4 +201,5 @@ module.exports = {
     setPasswordOnFirstLogin,
 	updateUserProfile,
 	editUserRole,
+	deleteUser,
 };

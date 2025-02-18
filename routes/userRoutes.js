@@ -5,6 +5,7 @@ const {
 	getUser,
 	getUsers,
 	createUserByAdmin,
+	deleteUser,
 } = require('../controllers/userController');
 const {
 	authenticateUser,
@@ -18,13 +19,14 @@ router.get('/all', authenticateUser, getUsers);
 
 router.patch('/update-profile', authenticateUser, updateUserProfile);
 
-router.get('/user/:userId', authenticateUser, getUser);
+router.get('/:id', authenticateUser, getUser);
+router.get('/:id', authenticateUser, deleteUser);
 
 // Update Profile (Authenticated users only)
 
 // Edit Role (Admin only)
 router.patch(
-	'/edit-role/:userId',
+	'/edit-role/:id',
 	authenticateUser,
 	authorizePermissions('admin'),
 	editUserRole
