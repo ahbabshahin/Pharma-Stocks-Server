@@ -4,6 +4,7 @@ const {
 	editUserRole,
 	getUser,
 	getUsers,
+	createUserByAdmin,
 } = require('../controllers/userController');
 const {
 	authenticateUser,
@@ -12,6 +13,7 @@ const {
 const router = express.Router();
 const { validateUser } = require('../middleware/validation');
 
+router.post('/', authenticateUser, authorizePermissions('admin'), createUserByAdmin)
 router.get('/all', authenticateUser, getUsers);
 
 router.put('/update-profile', authenticateUser, updateUserProfile);

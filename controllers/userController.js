@@ -59,6 +59,52 @@ const getUser = async (req, res) => {
 	}
 };
 
+const createUserByAdmin = async (req, res) => {
+	const { name, username, email, role = 'user' } = req.body;
+
+	if (!name || !username || !email) {
+		return res.status(400).json({ message: 'Name, username, and email are required' });
+	}
+
+	try {
+		const user = await User.create({ name, username, email, role });
+		res.status(201).json({ message: 'User created successfully', user });
+	} catch (error) {
+		console.error('Error creating user by admin:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
+	}
+};
+
+// First Login - Set Password API
+const setPasswordOnFirstLogin = async (req, res) => {
+	const { email, password } = req.body;
+
+	if (!email || !password) {
+		return res.status(400).json({ message: 'Email and password are required' });
+	}
+
+	try {
+		const user = await User.findOne({ email });
+		if (!user) {
+			return res.status(404).json({ message: 'User not found' });
+		}
+
+		if (user.isPasswordSet) {
+			return res.status(400).json({ message: 'Password is already set' });
+		}
+
+		// Hash password and update user
+		const hashedPassword = await bcrypt.hash(password, 10);
+		user.password = hashedPassword;
+		user.isPasswordSet = true;
+		await user.save();
+
+		res.status(200).json({ message: 'Password set successfully' });
+	} catch (error) {
+		console.error('Error setting password:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
+	}
+};
 
 // Update profile
 const updateUserProfile = async (req, res) => {
@@ -115,6 +161,8 @@ const editUserRole = async (req, res) => {
 module.exports = {
 	getUsers,
 	getUser,
+	createUserByAdmin,
+    setPasswordOnFirstLogin,
 	updateUserProfile,
 	editUserRole,
 };
