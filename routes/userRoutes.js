@@ -16,7 +16,7 @@ router.get('/all', authenticateUser, getUsers);
 
 router.put('/update-profile', authenticateUser, updateUserProfile);
 
-router.get('/user/:userId', authenticateUser, getUser);
+router.get('/:userId', authenticateUser, getUser);
 
 // Update Profile (Authenticated users only)
 
