@@ -20,7 +20,7 @@ router.get('/all', authenticateUser, getUsers);
 router.patch('/update-profile', authenticateUser, updateUserProfile);
 
 router.get('/:id', authenticateUser, getUser);
-router.get('/:id', authenticateUser, deleteUser);
+router.delete('/:id', authenticateUser, deleteUser);
 
 // Update Profile (Authenticated users only)
 
