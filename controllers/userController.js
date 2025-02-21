@@ -68,7 +68,7 @@ const createUserByAdmin = async (req, res) => {
 
 	try {
 		const user = await User.create({ name, username, email, role });
-		res.status(201).json({ message: 'User created successfully', user });
+		res.status(201).json({ message: 'User created successfully', body: user });
 	} catch (error) {
 		console.error('Error creating user by admin:', error);
 		res.status(500).json({ message: 'Server error', error: error.message });
@@ -108,13 +108,14 @@ const setPasswordOnFirstLogin = async (req, res) => {
 
 // Update profile
 const updateUserProfile = async (req, res) => {
-	const { username, email, password, newPassword } = req.body;
-	const id = req.user.id;
+	const { id } = req.params;
+	const { name, username, email, password, newPassword } = req.body;
 
 	try {
 		const user = await User.findById(id);
 
 		if (username) user.username = username;
+		if (name) user.name = name;
 		if (email) user.email = email;
 
 		if (password && newPassword) {
@@ -128,7 +129,9 @@ const updateUserProfile = async (req, res) => {
 		}
 
 		await user.save();
-		res.json({ message: 'Profile updated successfully' });
+		const userObject = user.toObject();
+		delete userObject.password;
+		res.json({ message: 'Profile updated successfully', body: user });
 	} catch (error) {
 		res.status(500).json({ message: 'Server error' });
 	}
