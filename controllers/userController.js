@@ -109,12 +109,13 @@ const setPasswordOnFirstLogin = async (req, res) => {
 // Update profile
 const updateUserProfile = async (req, res) => {
 	const { id } = req.params;
-	const { username, email, password, newPassword } = req.body;
+	const { name, username, email, password, newPassword } = req.body;
 
 	try {
 		const user = await User.findById(id);
 
 		if (username) user.username = username;
+		if (name) user.name = name;
 		if (email) user.email = email;
 
 		if (password && newPassword) {
@@ -128,6 +129,8 @@ const updateUserProfile = async (req, res) => {
 		}
 
 		await user.save();
+		const userObject = user.toObject();
+		delete userObject.password;
 		res.json({ message: 'Profile updated successfully', body: user });
 	} catch (error) {
 		res.status(500).json({ message: 'Server error' });
