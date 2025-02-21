@@ -17,7 +17,7 @@ const { validateUser } = require('../middleware/validation');
 router.post('/', authenticateUser, authorizePermissions('admin'), createUserByAdmin)
 router.get('/all', authenticateUser, getUsers);
 
-router.patch('/update-profile', authenticateUser, updateUserProfile);
+router.patch('/:id', authenticateUser, updateUserProfile);
 
 router.get('/:id', authenticateUser, getUser);
 router.delete('/:id', authenticateUser, deleteUser);
