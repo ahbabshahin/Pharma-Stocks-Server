@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const validator = require('validator');
 const uniqueValidator = require('mongoose-unique-validator');
-
+const config = require("../config/constants");
 const userSchema = new mongoose.Schema({
 	username: {
 		type: String,
@@ -30,12 +30,12 @@ const userSchema = new mongoose.Schema({
 	},
 	role: {
 		type: String,
-		enum: ['admin', 'user'],
-		default: 'user',
+		enum: config.ROLES,
+		default: config.DEFAULT_ROLE,
 	},
 	isPasswordSet: {
 		type: Boolean,
-		default: false, // Track whether password is set
+		default: true, // Track whether password is set
 	},
 });
 
