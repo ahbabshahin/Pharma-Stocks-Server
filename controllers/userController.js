@@ -77,14 +77,15 @@ const createUserByAdmin = async (req, res) => {
 
 // First Login - Set Password API
 const setPasswordOnFirstLogin = async (req, res) => {
-	const { email, password } = req.body;
+	const { id } = req.params;
+	const { username, password } = req.body;
 
-	if (!email || !password) {
+	if (!username || !password) {
 		return res.status(400).json({ message: 'Email and password are required' });
 	}
 
 	try {
-		const user = await User.findOne({ email });
+		const user = await User.findById(id);
 		if (!user) {
 			return res.status(404).json({ message: 'User not found' });
 		}
