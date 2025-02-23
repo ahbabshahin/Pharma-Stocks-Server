@@ -6,6 +6,7 @@ const {
 	getUsers,
 	createUserByAdmin,
 	deleteUser,
+	setPasswordOnFirstLogin,
 } = require('../controllers/userController');
 const {
 	authenticateUser,
@@ -18,6 +19,7 @@ router.post('/', authenticateUser, authorizePermissions('admin'), createUserByAd
 router.get('/all', authenticateUser, getUsers);
 
 router.patch('/:id', authenticateUser, updateUserProfile);
+router.patch('/set-password/:id', authenticateUser, setPasswordOnFirstLogin);
 
 router.get('/:id', authenticateUser, getUser);
 router.delete('/:id', authenticateUser, deleteUser);
