@@ -19,7 +19,7 @@ router.post('/', authenticateUser, authorizePermissions('admin'), createUserByAd
 router.get('/all', authenticateUser, getUsers);
 
 router.patch('/:id', authenticateUser, updateUserProfile);
-router.patch('/set-password/:id', authenticateUser, setPasswordOnFirstLogin);
+router.patch('/set-password/:id', setPasswordOnFirstLogin);
 
 router.get('/:id', authenticateUser, getUser);
 router.delete('/:id', authenticateUser, deleteUser);
