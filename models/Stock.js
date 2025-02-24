@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const config = require("../config/constants");
+
 const stockSchema = new mongoose.Schema({
 	name: {
 		type: String,
@@ -22,7 +24,7 @@ const stockSchema = new mongoose.Schema({
 	},
 	lowStockThreshold: {
 		type: Number,
-		default: 10, // Customize as needed
+		default: config.LOW_STOCK_THRESHOLD, 
 	},
 	isLowStock: {
 		type: Boolean,

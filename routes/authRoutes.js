@@ -3,6 +3,7 @@ const {
 	registerUser,
 	loginUser,
 	logoutUser,
+	checkUserExists,
 } = require('../controllers/authController');
 const {
 	authenticateUser,
@@ -13,6 +14,7 @@ const { validateUser } = require('../middleware/validation');
 // Register
 router.post('/register', registerUser);
 
+router.get('/check-user/:username', checkUserExists);
 // Login
 router.post('/login', loginUser);
 

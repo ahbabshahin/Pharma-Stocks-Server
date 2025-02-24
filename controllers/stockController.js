@@ -179,44 +179,47 @@ const updateStockForStore = async (req, res) => {
 };
 
 const searchStock = async (req, res) => {
-	const { query, quantity, price, } = req.query; // Get the search query and additional filters from query parameters
+    const { query, quantity, price } = req.query; // Get the search query and additional filters
 
-	// Build the search criteria
-	const searchCriteria = {
-		$or: [],
-	};
+    // Build the search criteria
+    const searchCriteria = {
+        $or: [],
+    };
 
-	if (query) {
-		searchCriteria.$or.push(
-			{ name: { $regex: query, $options: 'i' } },
-			{ dosage: { $regex: query, $options: 'i' } },
-			{ brand: { $regex: query, $options: 'i' } }
-		);
-	}
+    if (query) {
+        searchCriteria.$or.push(
+            { name: { $regex: query, $options: 'i' } },
+            { dosage: { $regex: query, $options: 'i' } },
+            { brand: { $regex: query, $options: 'i' } }
+        );
+    }
 
-	if (quantity) {
-		searchCriteria.quantity = quantity; // Filter by quantity
-	}
+    if (quantity) {
+        searchCriteria.quantity = quantity; // Filter by quantity
+    }
 
-	if (price) {
-		searchCriteria.price = price; // Filter by price
-	}
+    if (price) {
+        searchCriteria.price = price; // Filter by price
+    }
 
-	try {
-		const products = await Stock.find(searchCriteria);
+    try {
+        const products = await Stock.find(searchCriteria);
+        const totalFound = await Stock.countDocuments(searchCriteria); // Count total matching stocks
 
-		if (products.length === 0) {
-			return res.status(404).json({ message: 'No products found' });
-		}
+        if (products.length === 0) {
+            return res.status(404).json({ message: 'No products found', totalFound: 0 });
+        }
 
-		res.status(200).json({
-			body: products,
-			message: 'Product search successful',
-		});
-	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
-	}
+        res.status(200).json({
+            body: products,
+            total: totalFound, // Include total found stocks
+            message: 'Product search successful',
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
+
 
 module.exports = {
 	createProduct,

@@ -67,7 +67,7 @@ const createUserByAdmin = async (req, res) => {
 	}
 
 	try {
-		const user = await User.create({ name, username, email, role });
+		const user = await User.create({ name, username, email, role, isPasswordSet: false});
 		res.status(201).json({ message: 'User created successfully', body: user });
 	} catch (error) {
 		console.error('Error creating user by admin:', error);
@@ -77,14 +77,15 @@ const createUserByAdmin = async (req, res) => {
 
 // First Login - Set Password API
 const setPasswordOnFirstLogin = async (req, res) => {
-	const { email, password } = req.body;
+	const { id } = req.params;
+	const { username, password } = req.body;
 
-	if (!email || !password) {
+	if (!username || !password) {
 		return res.status(400).json({ message: 'Email and password are required' });
 	}
 
 	try {
-		const user = await User.findOne({ email });
+		const user = await User.findById(id);
 		if (!user) {
 			return res.status(404).json({ message: 'User not found' });
 		}
@@ -109,7 +110,7 @@ const setPasswordOnFirstLogin = async (req, res) => {
 // Update profile
 const updateUserProfile = async (req, res) => {
 	const { id } = req.params;
-	const { name, username, email, password, newPassword } = req.body;
+	const { name, username, email, password, newPassword, role } = req.body;
 
 	try {
 		const user = await User.findById(id);
@@ -117,6 +118,7 @@ const updateUserProfile = async (req, res) => {
 		if (username) user.username = username;
 		if (name) user.name = name;
 		if (email) user.email = email;
+		if (email) user.role = role;
 
 		if (password && newPassword) {
 			const isMatch = await bcrypt.compare(password, user.password);

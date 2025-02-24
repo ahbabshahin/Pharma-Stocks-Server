@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const config = require("../config/constants");
+
 const invoiceSchema = new mongoose.Schema({
 	user: {
 		type: mongoose.Schema.Types.ObjectId,
@@ -25,15 +27,15 @@ const invoiceSchema = new mongoose.Schema({
 	],
 	discount: {
 		type: Number,
-		default: 0.15, // 15% tax rate
+		default: config.TAX_RATE, // 15% tax rate
 	},
 	totalAmount: {
 		type: Number,
 	},
 	status: {
 		type: String,
-		enum: ['paid', 'due'],
-		default: 'due',
+		enum: config.STATUS,
+		default: config.DEFAULT_STATUS,
 	},
 	customer: {
 			type: String,
