@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const activityLogSchema = require('./ActivityLog');
+
 const customerSchema = new mongoose.Schema({
 		sn:{
 		type:String,
@@ -29,6 +31,8 @@ const customerSchema = new mongoose.Schema({
 			type: String,
 		},
 	],
+	activity_log: [activityLogSchema],
+
 });
 
 module.exports =

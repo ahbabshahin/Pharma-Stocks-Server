@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const config = require("../config/constants");
+const activityLogSchema = require('./ActivityLog');
 
 const stockSchema = new mongoose.Schema({
 	name: {
@@ -30,6 +31,8 @@ const stockSchema = new mongoose.Schema({
 		type: Boolean,
 		default: false,
 	},
+	activity_log: [activityLogSchema],
+
 });
 
 // Pre-save hook to check for low stock
