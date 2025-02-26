@@ -20,7 +20,7 @@ const calculateTotal = (products, discountRate) => {
 
 // Create Invoice
 const createInvoice = async (req, res) => {
-	const { products, customer, sendPDF, status, sn, discount, totalAmount } =
+	const { products, customer, sendPDF, status, sn, discount, totalAmount, activity_log } =
 		req.body;
 	console.log('products: ', products);
 
@@ -79,6 +79,7 @@ const createInvoice = async (req, res) => {
 			totalAmount,
 			sn,
 			discount,
+			activity_log
 		});
 
 		// Update the customer's invoices array
