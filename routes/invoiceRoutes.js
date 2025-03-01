@@ -7,6 +7,7 @@ const {
 	updateInvoice,
 	deleteInvoice,
 	generatePDF,
+	searchInvoices,
 } = require('../controllers/invoiceController');
 const {
 	authenticateUser,
@@ -18,6 +19,15 @@ router.post('/', authenticateUser, createInvoice);
 
 // Get all invoices with pagination and filtering
 router.get('/', authenticateUser, getAllInvoices);
+
+// Search invoices by date range and customer
+// Query parameters:
+// - startDate: start date for search (YYYY-MM-DD)
+// - endDate: end date for search (YYYY-MM-DD)
+// - customer: customer name to search for
+// - page: page number (default: 1)
+// - limit: items per page (default: 10)
+router.get('/search', authenticateUser, searchInvoices);
 
 // Get a single invoice by ID
 router.get('/:id', authenticateUser, getInvoice);
