@@ -20,81 +20,104 @@ const calculateTotal = (products, discountRate) => {
 
 // Create Invoice
 const createInvoice = async (req, res) => {
-	const { products, customer, sendPDF, status, sn, discount, totalAmount } =
-		req.body;
-	console.log('products: ', products);
+  const {
+    products,
+    customer,
+    sendPDF,
+    status,
+    sn,
+    discount,
+    totalAmount,
+    activity_log,
+  } = req.body;
+  console.log("products: ", products);
 
-	if (!products || !customer) {
-		throw new CustomError.BadRequestError(
-			'Products and customer are required'
-		);
-	}
+  if (!products || !customer) {
+    throw new CustomError.BadRequestError("Products and customer are required");
+  }
 
-	try {
-		// Check if the customer exists
-		const existingCustomer = await Customer.findById(customer);
-		if (!existingCustomer) {
-			throw new CustomError.NotFoundError(
-				`Customer with ID "${customer}" not found`
-			);
-		}
+  try {
+    // Check if the customer exists
+    const existingCustomer = await Customer.findById(customer);
+    if (!existingCustomer) {
+      throw new CustomError.NotFoundError(
+        `Customer with ID "${customer}" not found`
+      );
+    }
 
-		// Check stock availability and update quantities
-		for (const product of products) {
-			const stock = await Stock.findById(product._id);
-			console.log('stock: ', stock);
+    // Check stock availability and update quantities
+    for (const product of products) {
+      const stock = await Stock.findById(product._id);
+      console.log("stock: ", stock);
 
-			if (!stock) {
-				res.status(404).json({
-					message: `Product "${product.name}" not found in stock`,
-				});
-			} else if (product.quantity > stock.quantity) {
-				res.status(500).json({
-					message: `Insufficient stock for product "${product.name}". Available quantity: ${stock.quantity}`,
-				});
-			}
+      if (!stock) {
+        res.status(404).json({
+          message: `Product "${product.name}" not found in stock`,
+        });
+      } else if (product.quantity > stock.quantity) {
+        res.status(500).json({
+          message: `Insufficient stock for product "${product.name}". Available quantity: ${stock.quantity}`,
+        });
+      }
 
-			// Calculate the new stock quantity
-			const updatedQuantity = stock.quantity - product.quantity;
+      // Calculate the new stock quantity
+      const updatedQuantity = stock.quantity - product.quantity;
 
-			// Update stock directly with `$set`
-			await Stock.findByIdAndUpdate(
-				product._id,
-				{ $set: { quantity: updatedQuantity } },
-				{ new: true }
-			);
-		}
+      // Update stock directly with `$set`
+      await Stock.findByIdAndUpdate(
+        product._id,
+        { $set: { quantity: updatedQuantity } },
+        { new: true }
+      );
+    }
 
-		// Calculate total and subtotal
-		const { subtotal, total } = calculateTotal(products, discount);
-		if(totalAmount !== total){
-			res.status(500).json({ message: 'Total amount is wrong', error });
-		}
-		// Create the invoice
-		const invoice = await Invoice.create({
-			user: req.user.userId,
-			status,
-			products,
-			customer,
-			totalAmount,
-			sn,
-			discount,
-		});
+    // Calculate total and subtotal
+    const { subtotal, total } = calculateTotal(products, discount);
+    if (totalAmount !== total) {
+      res.status(500).json({ message: "Total amount is wrong", error });
+    }
 
-		// Update the customer's invoices array
-		existingCustomer.invoices.push(invoice._id);
-		await existingCustomer.save();
+    // Initialize activity log with creation entry
+    const initialActivityLog = [
+      {
+        name: req.user.name || "System", // Add name field
+        action: "created",
+        when: new Date(),
+        user: req.user.userId,
+        description: "Invoice created",
+      },
+      ...(activity_log || []).map((log) => ({
+        ...log,
+        name: log.name || req.user.name || "System", // Ensure all logs have a name
+      })),
+    ];
 
-		// Generate PDF if requested
-		if (sendPDF) {
-			await generatePDF(invoice);
-		}
+    // Create the invoice
+    const invoice = await Invoice.create({
+      user: req.user.userId,
+      status,
+      products,
+      customer,
+      totalAmount,
+      sn,
+      discount,
+      activity_log: initialActivityLog,
+    });
 
-		res.status(201).json({ body: invoice });
-	} catch (error) {
-		console.error('Error creating invoice:', error);
-		res.status(500).json({ message: 'Server error', error });
-	}
+    // Update the customer's invoices array
+    existingCustomer.invoices.push(invoice._id);
+    await existingCustomer.save();
+
+    // Generate PDF if requested
+    if (sendPDF) {
+      await generatePDF(invoice);
+    }
+
+    res.status(201).json({ body: invoice });
+  } catch (error) {
+    console.error("Error creating invoice:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
 };
 
 // Get All Invoices with Pagination and Filtering
@@ -139,46 +162,95 @@ const getInvoice = async (req, res) => {
 
 // Update Invoice (Admin only)
 const updateInvoice = async (req, res) => {
-	const { id } = req.params;
-	let updateFields = req.body; // Contains all fields to update
+  const { id } = req.params;
+  let updateFields = req.body; // Contains all fields to update
 
-	try {
-		// Admin authorization
-		if (req.user.role !== 'admin') {
-			throw new CustomError.UnauthorizedError(
-				'Only admin users can update invoices'
-			);
-		}
+  try {
+    // Admin authorization
+    if (req.user.role !== "admin") {
+      throw new CustomError.UnauthorizedError(
+        "Only admin users can update invoices"
+      );
+    }
 
-		// Ensure `_id` is not updated
-		if (updateFields._id) {
-			delete updateFields._id;
-		}
+    // Ensure `_id` is not updated
+    if (updateFields._id) {
+      delete updateFields._id;
+    }
 
-		// Update the invoice
-		const updatedInvoice = await Invoice.findByIdAndUpdate(
-			id,
-			updateFields, // Update with all provided fields except `_id`
-			{ new: true, runValidators: true } // Return updated document & enforce schema validation
-		);
+    // Add activity log entry for the update
+    const existingInvoice = await Invoice.findById(id);
+    if (!existingInvoice) {
+      throw new CustomError.NotFoundError(`No invoice found with ID: ${id}`);
+    }
 
-		if (!updatedInvoice) {
-			throw new CustomError.NotFoundError(
-				`No invoice found with ID: ${id}`
-			);
-		}
+    // Check for product quantity changes and update stock
+    if (updateFields.products) {
+      for (const updatedProduct of updateFields.products) {
+        const existingProduct = existingInvoice.products.find(
+          (p) => p._id === updatedProduct._id
+        );
 
-		res.status(200).json({
-			message: 'Invoice updated successfully',
-			body: updatedInvoice,
-		});
-	} catch (error) {
-		console.error('Error updating invoice:', error);
-		res.status(500).json({
-			message: 'Server error',
-			error: error.message || 'Unknown error',
-		});
-	}
+        if (existingProduct) {
+          const quantityDiff =
+            updatedProduct.quantity - existingProduct.quantity;
+
+          if (quantityDiff !== 0) {
+            // Find the product in inventory and update stock
+            const product = await Product.findById(updatedProduct._id);
+            if (product) {
+              // If quantity increased, decrease stock
+              // If quantity decreased, increase stock
+              product.stock -= quantityDiff;
+
+              if (product.stock < 0) {
+                throw new Error(
+                  `Insufficient stock for product: ${product.name}`
+                );
+              }
+
+              await product.save();
+            }
+          }
+        }
+      }
+    }
+
+    // Create update activity log entry
+    const updateActivityLog = {
+      action: "updated",
+      when: new Date(),
+      user: req.user.userId,
+      name: req.user.name,
+      description: "Invoice updated",
+      // changes: Object.keys(updateFields).filter(key => key !== 'activity_log').join(', ') // Log which fields were updated
+    };
+
+    // Merge existing activity log with new log entry and any additional logs from request
+    const updatedActivityLog = [
+      ...(existingInvoice.activity_log || []),
+      updateActivityLog,
+      ...(updateFields.activity_log || []),
+    ];
+    updateFields.activity_log = updatedActivityLog;
+
+    // Update the invoice
+    const updatedInvoice = await Invoice.findByIdAndUpdate(id, updateFields, {
+      new: true,
+      runValidators: true,
+    });
+
+    res.status(200).json({
+      message: "Invoice updated successfully",
+      body: updatedInvoice,
+    });
+  } catch (error) {
+    console.error("Error updating invoice:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message || "Unknown error",
+    });
+  }
 };
 
 
@@ -227,6 +299,87 @@ const generatePDF = (invoice) => {
 	});
 };
 
+// Search Invoices
+const searchInvoices = async (req, res) => {
+	const { startDate, endDate, customer } = req.query;
+	const page = parseInt(req.query.page, 10) || 1;
+	const limit = parseInt(req.query.limit, 10) || 10;
+
+	try {
+		const queryObject = {};
+
+		// Date range filter
+		if (startDate || endDate) {
+			queryObject.createdAt = {};
+			if (startDate) {
+				queryObject.createdAt.$gte = new Date(startDate);
+			}
+			if (endDate) {
+				// Set endDate to end of day
+				const endOfDay = new Date(endDate);
+				endOfDay.setHours(23, 59, 59, 999);
+				queryObject.createdAt.$lte = endOfDay;
+			}
+		}
+
+		// If customer search is provided, first find matching customers
+		if (customer) {
+			const matchingCustomers = await Customer.find({
+				name: { $regex: customer, $options: 'i' }
+			}).select('_id');
+			
+			const customerIds = matchingCustomers.map(c => c._id.toString());
+			if (customerIds.length > 0) {
+				queryObject.customer = { $in: customerIds };
+			} else {
+				// If no matching customers found, return empty result
+				return res.status(200).json({
+					success: true,
+					body: [],
+					total: 0,
+					page: Number(page),
+					totalPages: 0,
+					hasMore: false,
+					filters: {
+						dateRange: startDate || endDate ? { startDate, endDate } : null,
+						customer: customer || null
+					}
+				});
+			}
+		}
+
+		// Execute search query with customer population
+		const invoices = await Invoice.find(queryObject)
+			.sort({ createdAt: -1 })
+			.skip((page - 1) * limit)
+			.limit(Number(limit))
+			.populate('user', 'username email')
+			.populate('customer', 'name email contacts address'); // Populate customer details
+
+		const totalInvoices = await Invoice.countDocuments(queryObject);
+
+		res.status(200).json({
+			success: true,
+			body: invoices,
+			total: totalInvoices,
+			page: Number(page),
+			totalPages: Math.ceil(totalInvoices / limit),
+			hasMore: page * limit < totalInvoices,
+			filters: {
+				dateRange: startDate || endDate ? { startDate, endDate } : null,
+				customer: customer || null
+			}
+		});
+	} catch (error) {
+		console.error('Error searching invoices:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Error searching invoices',
+			error: error.message
+		});
+	}
+};
+
 module.exports = {
 	createInvoice,
 	getAllInvoices,
@@ -234,4 +387,5 @@ module.exports = {
 	updateInvoice,
 	deleteInvoice,
 	generatePDF,
+	searchInvoices,
 };

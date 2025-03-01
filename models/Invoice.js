@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const config = require("../config/constants");
+const activityLogSchema = require('./ActivityLog');
 
 const invoiceSchema = new mongoose.Schema({
 	user: {
@@ -46,7 +47,12 @@ const invoiceSchema = new mongoose.Schema({
 	},
 	sn:{
 		type:String,
-	}
+	},
+	activity_log: {
+		type: [activityLogSchema],
+		required: false
+	},
+
 });
 
 invoiceSchema.pre('save', function (next) {

@@ -2,6 +2,8 @@ const mongoose = require('mongoose');
 const validator = require('validator');
 const uniqueValidator = require('mongoose-unique-validator');
 const config = require("../config/constants");
+const activityLogSchema = require('./ActivityLog');
+
 const userSchema = new mongoose.Schema({
 	username: {
 		type: String,
@@ -36,6 +38,10 @@ const userSchema = new mongoose.Schema({
 	isPasswordSet: {
 		type: Boolean,
 		default: true, // Track whether password is set
+	},
+	activity_log: {
+		type: [activityLogSchema],
+		required: false
 	},
 });
 

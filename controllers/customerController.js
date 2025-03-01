@@ -6,18 +6,18 @@ const createCustomer = async (req, res) => {
 	const { name, contacts, address, sn } = req.body;
 
 	try {
-		const isContactUnique = await Customer.findOne({contacts});
-		if(isContactUnique){
-			return res
-				.status(400)
-				.json({ message: 'Duplicate value for contacts' });
-		}else{
+		// const isContactUnique = await Customer.findOne({contacts});
+		// if(isContactUnique){
+		// 	return res
+		// 		.status(400)
+		// 		.json({ message: 'Duplicate value for contacts' });
+		// }else{
 		const customer = await Customer.create({ name, contacts, address, sn });
 		res.status(201).json({
 			message: 'Customer created successfully',
 			body: customer,
 		});
-	}
+	// }
 	} catch (error) {
 		if (error.code === 11000) {
 			return res
