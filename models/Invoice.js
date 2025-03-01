@@ -48,7 +48,10 @@ const invoiceSchema = new mongoose.Schema({
 	sn:{
 		type:String,
 	},
-	activity_log: [activityLogSchema],
+	activity_log: {
+		type: [activityLogSchema],
+		required: false
+	},
 
 });
 

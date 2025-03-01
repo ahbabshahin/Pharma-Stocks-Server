@@ -31,7 +31,10 @@ const stockSchema = new mongoose.Schema({
 		type: Boolean,
 		default: false,
 	},
-	activity_log: [activityLogSchema],
+	activity_log: {
+		type: [activityLogSchema],
+		required: false
+	},
 
 });
 

@@ -16,7 +16,7 @@ const customerSchema = new mongoose.Schema({
 	contacts: {
 		type: String,
 		// required: [true, 'Phone number is required'],
-		unique: true,
+		// unique: true,
 	},
 	address: {
 		type: String,
@@ -31,7 +31,10 @@ const customerSchema = new mongoose.Schema({
 			type: String,
 		},
 	],
-	activity_log: [activityLogSchema],
+	activity_log: {
+		type: [activityLogSchema],
+		required: false
+	},
 
 });
 

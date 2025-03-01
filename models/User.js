@@ -39,7 +39,10 @@ const userSchema = new mongoose.Schema({
 		type: Boolean,
 		default: true, // Track whether password is set
 	},
-	activity_log: [activityLogSchema],
+	activity_log: {
+		type: [activityLogSchema],
+		required: false
+	},
 });
 
 // Apply unique validation plugin
