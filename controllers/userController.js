@@ -67,7 +67,19 @@ const createUserByAdmin = async (req, res) => {
 	}
 
 	try {
-		const user = await User.create({ name, username, email, role, isPasswordSet: false});
+		const user = await User.create({ 
+			name, 
+			username, 
+			email, 
+			role, 
+			isPasswordSet: false,
+			activity_log: [{
+				user: req.user.userId,
+				name: req.user.name || 'Admin',
+				action: 'create_user',
+				description: `User created by admin with role: ${role}`
+			}]
+		});
 		res.status(201).json({ message: 'User created successfully', body: user });
 	} catch (error) {
 		console.error('Error creating user by admin:', error);
@@ -115,20 +127,33 @@ const updateUserProfile = async (req, res) => {
 	try {
 		const user = await User.findById(id);
 
+		const changes = [];
+		if (username && username !== user.username) changes.push('username');
+		if (name && name !== user.name) changes.push('name');
+		if (email && email !== user.email) changes.push('email');
+		if (role && role !== user.role) changes.push('role');
+		if (password && newPassword) changes.push('password');
+
 		if (username) user.username = username;
 		if (name) user.name = name;
 		if (email) user.email = email;
-		if (email) user.role = role;
+		if (role) user.role = role;
 
 		if (password && newPassword) {
 			const isMatch = await bcrypt.compare(password, user.password);
 			if (!isMatch) {
-				return res
-					.status(400)
-					.json({ message: 'Incorrect current password' });
+				return res.status(400).json({ message: 'Incorrect current password' });
 			}
 			user.password = await bcrypt.hash(newPassword, 10);
 		}
+
+		// Add activity log entry
+		user.activity_log.push({
+			user: req.user.userId,
+			name: req.user.name || 'User',
+			action: 'update_profile',
+			description: `Profile updated. Changed fields: ${changes.join(', ')}`
+		});
 
 		await user.save();
 		const userObject = user.toObject();
@@ -154,13 +179,21 @@ const editUserRole = async (req, res) => {
 			return res.status(400).json({ message: 'Invalid role' });
 		}
 		if (req.user.id === id) {
-			return res
-				.status(400)
-				.json({ message: 'Admins cannot edit their role' });
+			return res.status(400).json({ message: 'Admins cannot edit their role' });
 		}
-		user.role = role;
-		await user.save();
 
+		const oldRole = user.role;
+		user.role = role;
+
+		// Add activity log entry
+		user.activity_log.push({
+			user: req.user.userId,
+			name: req.user.name || 'Admin',
+			action: 'role_change',
+			description: `User role changed from ${oldRole} to ${role}`
+		});
+
+		await user.save();
 		res.json({ message: 'Role updated successfully', body: user });
 	} catch (error) {
 		res.status(500).json({ message: 'Server error' });
