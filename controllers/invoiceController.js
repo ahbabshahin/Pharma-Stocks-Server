@@ -70,6 +70,18 @@ const createInvoice = async (req, res) => {
 		if(totalAmount !== total){
 			res.status(500).json({ message: 'Total amount is wrong', error });
 		}
+
+		// Initialize activity log with creation entry
+		const initialActivityLog = [
+			{
+				action: 'created',
+				when: new Date(),
+				user: req.user.userId,
+				description: 'Invoice created'
+			},
+			...(activity_log || []) // Include any additional activity log entries from request
+		];
+
 		// Create the invoice
 		const invoice = await Invoice.create({
 			user: req.user.userId,
@@ -79,7 +91,7 @@ const createInvoice = async (req, res) => {
 			totalAmount,
 			sn,
 			discount,
-			activity_log
+			activity_log: initialActivityLog
 		});
 
 		// Update the customer's invoices array
@@ -156,18 +168,37 @@ const updateInvoice = async (req, res) => {
 			delete updateFields._id;
 		}
 
-		// Update the invoice
-		const updatedInvoice = await Invoice.findByIdAndUpdate(
-			id,
-			updateFields, // Update with all provided fields except `_id`
-			{ new: true, runValidators: true } // Return updated document & enforce schema validation
-		);
-
-		if (!updatedInvoice) {
+		// Add activity log entry for the update
+		const existingInvoice = await Invoice.findById(id);
+		if (!existingInvoice) {
 			throw new CustomError.NotFoundError(
 				`No invoice found with ID: ${id}`
 			);
 		}
+
+		// Create update activity log entry
+		const updateActivityLog = {
+			action: 'updated',
+			when: new Date(),
+			user: req.user.userId,
+			description: 'Invoice updated',
+			// changes: Object.keys(updateFields).filter(key => key !== 'activity_log').join(', ') // Log which fields were updated
+		};
+
+		// Merge existing activity log with new log entry and any additional logs from request
+		const updatedActivityLog = [
+			...(existingInvoice.activity_log || []),
+			updateActivityLog,
+			...(updateFields.activity_log || [])
+		];
+		updateFields.activity_log = updatedActivityLog;
+
+		// Update the invoice
+		const updatedInvoice = await Invoice.findByIdAndUpdate(
+			id,
+			updateFields,
+			{ new: true, runValidators: true }
+		);
 
 		res.status(200).json({
 			message: 'Invoice updated successfully',
