@@ -152,65 +152,94 @@ const getInvoice = async (req, res) => {
 
 // Update Invoice (Admin only)
 const updateInvoice = async (req, res) => {
-	const { id } = req.params;
-	let updateFields = req.body; // Contains all fields to update
+  const { id } = req.params;
+  let updateFields = req.body; // Contains all fields to update
 
-	try {
-		// Admin authorization
-		if (req.user.role !== 'admin') {
-			throw new CustomError.UnauthorizedError(
-				'Only admin users can update invoices'
-			);
-		}
+  try {
+    // Admin authorization
+    if (req.user.role !== "admin") {
+      throw new CustomError.UnauthorizedError(
+        "Only admin users can update invoices"
+      );
+    }
 
-		// Ensure `_id` is not updated
-		if (updateFields._id) {
-			delete updateFields._id;
-		}
+    // Ensure `_id` is not updated
+    if (updateFields._id) {
+      delete updateFields._id;
+    }
 
-		// Add activity log entry for the update
-		const existingInvoice = await Invoice.findById(id);
-		if (!existingInvoice) {
-			throw new CustomError.NotFoundError(
-				`No invoice found with ID: ${id}`
-			);
-		}
+    // Add activity log entry for the update
+    const existingInvoice = await Invoice.findById(id);
+    if (!existingInvoice) {
+      throw new CustomError.NotFoundError(`No invoice found with ID: ${id}`);
+    }
 
-		// Create update activity log entry
-		const updateActivityLog = {
-			action: 'updated',
-			when: new Date(),
-			user: req.user.userId,
-			description: 'Invoice updated',
-			// changes: Object.keys(updateFields).filter(key => key !== 'activity_log').join(', ') // Log which fields were updated
-		};
+    // Check for product quantity changes and update stock
+    if (updateFields.products) {
+      for (const updatedProduct of updateFields.products) {
+        const existingProduct = existingInvoice.products.find(
+          (p) => p._id === updatedProduct._id
+        );
 
-		// Merge existing activity log with new log entry and any additional logs from request
-		const updatedActivityLog = [
-			...(existingInvoice.activity_log || []),
-			updateActivityLog,
-			...(updateFields.activity_log || [])
-		];
-		updateFields.activity_log = updatedActivityLog;
+        if (existingProduct) {
+          const quantityDiff =
+            updatedProduct.quantity - existingProduct.quantity;
 
-		// Update the invoice
-		const updatedInvoice = await Invoice.findByIdAndUpdate(
-			id,
-			updateFields,
-			{ new: true, runValidators: true }
-		);
+          if (quantityDiff !== 0) {
+            // Find the product in inventory and update stock
+            const product = await Product.findById(updatedProduct._id);
+            if (product) {
+              // If quantity increased, decrease stock
+              // If quantity decreased, increase stock
+              product.stock -= quantityDiff;
 
-		res.status(200).json({
-			message: 'Invoice updated successfully',
-			body: updatedInvoice,
-		});
-	} catch (error) {
-		console.error('Error updating invoice:', error);
-		res.status(500).json({
-			message: 'Server error',
-			error: error.message || 'Unknown error',
-		});
-	}
+              if (product.stock < 0) {
+                throw new Error(
+                  `Insufficient stock for product: ${product.name}`
+                );
+              }
+
+              await product.save();
+            }
+          }
+        }
+      }
+    }
+
+    // Create update activity log entry
+    const updateActivityLog = {
+      action: "updated",
+      when: new Date(),
+      user: req.user.userId,
+      description: "Invoice updated",
+      // changes: Object.keys(updateFields).filter(key => key !== 'activity_log').join(', ') // Log which fields were updated
+    };
+
+    // Merge existing activity log with new log entry and any additional logs from request
+    const updatedActivityLog = [
+      ...(existingInvoice.activity_log || []),
+      updateActivityLog,
+      ...(updateFields.activity_log || []),
+    ];
+    updateFields.activity_log = updatedActivityLog;
+
+    // Update the invoice
+    const updatedInvoice = await Invoice.findByIdAndUpdate(id, updateFields, {
+      new: true,
+      runValidators: true,
+    });
+
+    res.status(200).json({
+      message: "Invoice updated successfully",
+      body: updatedInvoice,
+    });
+  } catch (error) {
+    console.error("Error updating invoice:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message || "Unknown error",
+    });
+  }
 };
 
 
@@ -259,6 +288,87 @@ const generatePDF = (invoice) => {
 	});
 };
 
+// Search Invoices
+const searchInvoices = async (req, res) => {
+	const { startDate, endDate, customer } = req.query;
+	const page = parseInt(req.query.page, 10) || 1;
+	const limit = parseInt(req.query.limit, 10) || 10;
+
+	try {
+		const queryObject = {};
+
+		// Date range filter
+		if (startDate || endDate) {
+			queryObject.createdAt = {};
+			if (startDate) {
+				queryObject.createdAt.$gte = new Date(startDate);
+			}
+			if (endDate) {
+				// Set endDate to end of day
+				const endOfDay = new Date(endDate);
+				endOfDay.setHours(23, 59, 59, 999);
+				queryObject.createdAt.$lte = endOfDay;
+			}
+		}
+
+		// If customer search is provided, first find matching customers
+		if (customer) {
+			const matchingCustomers = await Customer.find({
+				name: { $regex: customer, $options: 'i' }
+			}).select('_id');
+			
+			const customerIds = matchingCustomers.map(c => c._id.toString());
+			if (customerIds.length > 0) {
+				queryObject.customer = { $in: customerIds };
+			} else {
+				// If no matching customers found, return empty result
+				return res.status(200).json({
+					success: true,
+					body: [],
+					total: 0,
+					page: Number(page),
+					totalPages: 0,
+					hasMore: false,
+					filters: {
+						dateRange: startDate || endDate ? { startDate, endDate } : null,
+						customer: customer || null
+					}
+				});
+			}
+		}
+
+		// Execute search query with customer population
+		const invoices = await Invoice.find(queryObject)
+			.sort({ createdAt: -1 })
+			.skip((page - 1) * limit)
+			.limit(Number(limit))
+			.populate('user', 'username email')
+			.populate('customer', 'name email contacts address'); // Populate customer details
+
+		const totalInvoices = await Invoice.countDocuments(queryObject);
+
+		res.status(200).json({
+			success: true,
+			body: invoices,
+			total: totalInvoices,
+			page: Number(page),
+			totalPages: Math.ceil(totalInvoices / limit),
+			hasMore: page * limit < totalInvoices,
+			filters: {
+				dateRange: startDate || endDate ? { startDate, endDate } : null,
+				customer: customer || null
+			}
+		});
+	} catch (error) {
+		console.error('Error searching invoices:', error);
+		res.status(500).json({
+			success: false,
+			message: 'Error searching invoices',
+			error: error.message
+		});
+	}
+};
+
 module.exports = {
 	createInvoice,
 	getAllInvoices,
@@ -266,4 +376,5 @@ module.exports = {
 	updateInvoice,
 	deleteInvoice,
 	generatePDF,
+	searchInvoices,
 };
