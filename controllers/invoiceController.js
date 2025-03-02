@@ -197,7 +197,7 @@ const updateInvoice = async (req, res) => {
 
           if (quantityDiff !== 0) {
             // Find the product in inventory and update stock
-            const product = await Product.findById(updatedProduct._id);
+            const product = await Stock.findById(updatedProduct._id);
             if (product) {
               // If quantity increased, decrease stock
               // If quantity decreased, increase stock
