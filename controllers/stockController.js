@@ -2,183 +2,229 @@ const Stock = require('../models/Stock');
 const CustomError = require('../errors');
 
 // Create a new product
-const createProduct = async (req, res) => {
-	const { name, quantity, price, dosage } =
-		req.body;
+const createProduct = async(req, res) => {
+    const { name, quantity, price, dosage } =
+    req.body;
 
-	try {
-		const newProduct = new Stock(req?.body);
+    try {
+        const newProduct = new Stock(req.body);
 
-		await newProduct.save();
-		res.status(201).json({
-			message: 'Product created successfully',
-			body: newProduct,
-		});
-	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
-	}
+        // Add activity log entry for product creation
+        newProduct.activity_log.push({
+            user: req.user.userId, // Assuming user info is available in req.user
+            name: req.user.name,
+            when: new Date(),
+            action: 'CREATE',
+            description: `Product "${name}" created with quantity ${quantity} and price ${price}`,
+        });
+
+        await newProduct.save();
+        res.status(201).json({
+            message: 'Product created successfully',
+            body: newProduct,
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
 // Get all products with pagination
-const getAllProducts = async (req, res) => {
-	try {
-		// Parse and validate page and limit
-		const page = parseInt(req.query.page, 10) || 1; // Default to page 1
-		const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
-		const skip = (page - 1) * limit; // Calculate skip value
+const getAllProducts = async(req, res) => {
+    try {
+        // Parse and validate page and limit
+        const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+        const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
+        const skip = (page - 1) * limit; // Calculate skip value
 
-		// Fetch total products and paginated products
-		const totalProducts = await Stock.countDocuments();
-		const products = await Stock.find()
-			.skip(skip)
-			.limit(limit)
-			.sort({ _id: 1 }); // Sort by _id to ensure consistency
+        // Fetch total products and paginated products
+        const totalProducts = await Stock.countDocuments();
+        const products = await Stock.find()
+            .skip(skip)
+            .limit(limit)
+            .sort({ _id: 1 }); // Sort by _id to ensure consistency
 
-		// Respond with paginated data
-		res.status(200).json({
-			total: totalProducts,
-			totalPages: Math.ceil(totalProducts / limit),
-			currentPage: page,
-			body: products,
-		});
-	} catch (error) {
-		console.error('Error fetching products:', error);
-		res.status(500).json({ message: 'Server error', error });
-	}
+        // Respond with paginated data
+        res.status(200).json({
+            total: totalProducts,
+            totalPages: Math.ceil(totalProducts / limit),
+            currentPage: page,
+            body: products,
+        });
+    } catch (error) {
+        console.error('Error fetching products:', error);
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
 
 // Get product by ID
-const getProductById = async (req, res) => {
-	const { productId } = req.params;
+const getProductById = async(req, res) => {
+    const { productId } = req.params;
 
-	try {
-		const product = await Stock.findById(productId);
-		if (!product) {
-			return res.status(404).json({ message: 'Product not found' });
-		}
+    try {
+        const product = await Stock.findById(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
 
-		res.status(200).json({ product });
-	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
-	}
+        res.status(200).json({ product });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
-const updateProduct = async (req, res) => {
-	const { productId } = req.params;
-	const updates = req.body; // The fields to update
+const updateProduct = async(req, res) => {
+    const { productId } = req.params;
+    const updates = req.body; // The fields to update
 
-	try {
-		// Find the product by ID
-		const product = await Stock.findById(productId);
+    try {
+        // Find the product by ID
+        const product = await Stock.findById(productId);
 
-		if (!product) {
-			return res.status(404).json({ message: 'Product not found' });
-		}
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
 
-		// Update product fields dynamically
-		Object.keys(updates).forEach((key) => {
-			if (key in product) {
-				product[key] = updates[key];
-			}
-		});
+        // Store old values for activity log
+        const oldValues = {...product.toObject() };
 
-		await product.save();
+        // Update product fields dynamically
+        Object.keys(updates).forEach((key) => {
+            if (key in product) {
+                product[key] = updates[key];
+            }
+        });
 
-		res.status(200).json({
-			message: 'Product updated successfully',
-			body: product,
-		});
-	} catch (error) {
-		if (error.name === 'ValidationError') {
-			return res
-				.status(400)
-				.json({ message: 'Invalid data provided', error });
-		}
-		res.status(500).json({ message: 'Server error', error });
-	}
+        // Add activity log entry for product update
+        const changes = Object.keys(updates).map(key => {
+            if (key === '_id') return null;
+            if (oldValues[key] !== updates[key]) {
+                return `${key} from "${oldValues[key]}" to "${updates[key]}"`;
+            }
+            return null;
+        }).filter(change => change !== null);
+
+        product.activity_log.push({
+            user: req.user.userId,
+            name: req.user.name,
+            when: new Date(),
+            action: 'UPDATE',
+            description: `Product "${product.name}" updated. Changes: ${changes.join(', ')}`
+        });
+
+        await product.save();
+
+        res.status(200).json({
+            message: 'Product updated successfully',
+            body: product,
+        });
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            return res
+                .status(400)
+                .json({ message: 'Invalid data provided', error });
+        }
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
 // Update product stock (e.g., after a sale or return)
-const updateProductStock = async (req, res) => {
-	const { productId } = req.params;
-	const { soldQuantity, returnedQuantity } = req.body;
+const updateProductStock = async(req, res) => {
+    const { productId } = req.params;
+    const { soldQuantity, returnedQuantity } = req.body;
 
-	try {
-		const product = await Stock.findById(productId);
-		if (!product) {
-			return res.status(404).json({ message: 'Product not found' });
-		}
+    try {
+        const product = await Stock.findById(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
 
-		if (soldQuantity) {
-			product.quantity -= soldQuantity;
-		}
+        const oldQuantity = product.quantity;
+        let description = `Stock quantity changed from ${oldQuantity}`;
 
-		if (returnedQuantity) {
-			product.quantity += returnedQuantity;
-		}
+        if (soldQuantity) {
+            product.quantity -= soldQuantity;
+            description += ` (Sold: ${soldQuantity})`;
+        }
 
-		// Ensure stock does not fall below zero
-		if (product.quantity < 0) {
-			product.quantity = 0;
-		}
+        if (returnedQuantity) {
+            product.quantity += returnedQuantity;
+            description += ` (Returned: ${returnedQuantity})`;
+        }
 
-		await product.save();
-		res.status(200).json({
-			message: 'Stock updated successfully',
-			body: product,
-		});
-	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
-	}
+        // Ensure stock does not fall below zero
+        if (product.quantity < 0) {
+            description += ` (Adjusted to 0 from ${product.quantity})`;
+            product.quantity = 0;
+        }
+
+        description += ` to ${product.quantity}`;
+
+        // Add activity log entry for stock update
+        product.activity_log.push({
+            user: req.user.userId,
+            name: req.user.name,
+            when: new Date(),
+            action: 'STOCK_UPDATE',
+            description
+        });
+
+        await product.save();
+        res.status(200).json({
+            message: 'Stock updated successfully',
+            body: product,
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
 // Delete a product
-const deleteProduct = async (req, res) => {
-	const { productId } = req.params;
+const deleteProduct = async(req, res) => {
+    const { productId } = req.params;
 
-	try {
-		const product = await Stock.findByIdAndDelete(productId);
-		if (!product) {
-			return res.status(404).json({ message: 'Product not found' });
-		}
+    try {
+        const product = await Stock.findByIdAndDelete(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
 
-		res.status(200).json({ message: 'Product deleted successfully' });
-	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
-	}
+        res.status(200).json({ message: 'Product deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
 // Update stock for a specific store (Admin only)
-const updateStockForStore = async (req, res) => {
-	const { productId, storeId } = req.params;
-	const { stockLevel, lowStockThreshold } = req.body;
+const updateStockForStore = async(req, res) => {
+    const { productId, storeId } = req.params;
+    const { stockLevel, lowStockThreshold } = req.body;
 
-	try {
-		const product = await Stock.findById(productId);
-		if (!product) {
-			return res.status(404).json({ message: 'Product not found' });
-		}
+    try {
+        const product = await Stock.findById(productId);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
 
-		const store = product.stores.id(storeId);
-		if (!store) {
-			return res.status(404).json({ message: 'Store not found' });
-		}
+        const store = product.stores.id(storeId);
+        if (!store) {
+            return res.status(404).json({ message: 'Store not found' });
+        }
 
-		store.stockLevel = stockLevel || store.stockLevel;
-		store.lowStockThreshold = lowStockThreshold || store.lowStockThreshold;
+        store.stockLevel = stockLevel || store.stockLevel;
+        store.lowStockThreshold = lowStockThreshold || store.lowStockThreshold;
 
-		await product.save();
-		res.status(200).json({
-			message: 'Store stock updated successfully',
-			body: product,
-		});
-	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
-	}
+        await product.save();
+        res.status(200).json({
+            message: 'Store stock updated successfully',
+            body: product,
+        });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error });
+    }
 };
 
-const searchStock = async (req, res) => {
+const searchStock = async(req, res) => {
     const { query, quantity, price } = req.query; // Get the search query and additional filters
 
     // Build the search criteria
@@ -187,11 +233,7 @@ const searchStock = async (req, res) => {
     };
 
     if (query) {
-        searchCriteria.$or.push(
-            { name: { $regex: query, $options: 'i' } },
-            { dosage: { $regex: query, $options: 'i' } },
-            { brand: { $regex: query, $options: 'i' } }
-        );
+        searchCriteria.$or.push({ name: { $regex: query, $options: 'i' } }, { dosage: { $regex: query, $options: 'i' } }, { brand: { $regex: query, $options: 'i' } });
     }
 
     if (quantity) {
@@ -222,12 +264,12 @@ const searchStock = async (req, res) => {
 
 
 module.exports = {
-	createProduct,
-	getAllProducts,
-	getProductById,
-	updateProduct,
-	updateProductStock,
-	deleteProduct,
-	updateStockForStore,
-	searchStock,
+    createProduct,
+    getAllProducts,
+    getProductById,
+    updateProduct,
+    updateProductStock,
+    deleteProduct,
+    updateStockForStore,
+    searchStock,
 };
