@@ -413,6 +413,116 @@ const searchInvoices = async (req, res) => {
 	}
 };
 
+// Get Sales Report by Price
+const getSalesByPrice = async (req, res) => {
+    try {
+        const salesByPrice = await Invoice.aggregate([
+            { $match: { status: 'paid' } },
+            { $unwind: '$products' },
+            {
+                $group: {
+                    _id: '$products.price',
+                    totalQuantity: { $sum: '$products.quantity' },
+                    totalRevenue: { 
+                        $sum: { 
+                            $multiply: ['$products.price', '$products.quantity'] 
+                        } 
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            { $sort: { _id: 1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            body: salesByPrice
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error generating sales by price report',
+            error: error.message
+        });
+    }
+};
+
+// Get Sales Report by Quantity
+const getSalesByQuantity = async (req, res) => {
+    try {
+        const salesByQuantity = await Invoice.aggregate([
+            { $match: { status: 'paid' } },
+            { $unwind: '$products' },
+            {
+                $group: {
+                    _id: '$products.name',
+                    totalQuantity: { $sum: '$products.quantity' },
+                    totalRevenue: { 
+                        $sum: { 
+                            $multiply: ['$products.price', '$products.quantity'] 
+                        } 
+                    },
+                    averagePrice: { $avg: '$products.price' }
+                }
+            },
+            { $sort: { totalQuantity: -1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            body: salesByQuantity
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error generating sales by quantity report',
+            error: error.message
+        });
+    }
+};
+
+// Get Monthly Sales Report
+const getMonthlySales = async (req, res) => {
+    try {
+        const monthlySales = await Invoice.aggregate([
+            { $match: { status: 'paid' } },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createdAt' },
+                        month: { $month: '$createdAt' }
+                    },
+                    totalRevenue: { $sum: '$totalAmount' },
+                    totalInvoices: { $sum: 1 },
+                    averageInvoiceValue: { $avg: '$totalAmount' }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    year: '$_id.year',
+                    month: '$_id.month',
+                    totalRevenue: 1,
+                    totalInvoices: 1,
+                    averageInvoiceValue: 1
+                }
+            },
+            { $sort: { year: 1, month: 1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            body: monthlySales
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error generating monthly sales report',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
 	createInvoice,
 	getAllInvoices,
@@ -421,4 +531,7 @@ module.exports = {
 	deleteInvoice,
 	generatePDF,
 	searchInvoices,
+	getSalesByPrice,
+	getSalesByQuantity,
+	getMonthlySales
 };

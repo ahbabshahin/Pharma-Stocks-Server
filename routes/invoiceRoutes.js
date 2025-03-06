@@ -8,6 +8,9 @@ const {
 	deleteInvoice,
 	generatePDF,
 	searchInvoices,
+	getSalesByPrice,
+	getSalesByQuantity,
+	getMonthlySales
 } = require('../controllers/invoiceController');
 const {
 	authenticateUser,
@@ -19,6 +22,11 @@ router.post('/', authenticateUser, createInvoice);
 
 // Get all invoices with pagination and filtering
 router.get('/', authenticateUser, getAllInvoices);
+
+// Sales Report Routes
+router.get('/reports/by-price', authenticateUser, getSalesByPrice);
+router.get('/reports/by-quantity', authenticateUser, getSalesByQuantity);
+router.get('/reports/monthly', authenticateUser, getMonthlySales);
 
 // Search invoices by date range and customer
 // Query parameters:
