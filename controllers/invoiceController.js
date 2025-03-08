@@ -523,6 +523,62 @@ const getMonthlySales = async (req, res) => {
     }
 };
 
+// Get Yearly Sales Report
+const getYearlySales = async (req, res) => {
+    try {
+        const yearlySales = await Invoice.aggregate([
+            { $match: { status: 'paid' } },
+            {
+                $group: {
+                    _id: { year: { $year: '$createdAt' } },
+                    totalRevenue: { $sum: '$totalAmount' },
+                    totalInvoices: { $sum: 1 },
+                    averageInvoiceValue: { $avg: '$totalAmount' },
+                    // Additional product-level aggregations
+                    totalProducts: { 
+                        $sum: { $size: '$products' } 
+                    },
+                    totalQuantitySold: {
+                        $sum: { 
+                            $reduce: {
+                                input: '$products',
+                                initialValue: 0,
+                                in: { $add: ['$$value', '$$this.quantity'] }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    year: '$_id.year',
+                    totalRevenue: 1,
+                    totalInvoices: 1,
+                    averageInvoiceValue: 1,
+                    totalProducts: 1,
+                    totalQuantitySold: 1,
+                    averageRevenuePerProduct: { 
+                        $divide: ['$totalRevenue', '$totalProducts'] 
+                    }
+                }
+            },
+            { $sort: { year: 1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            body: yearlySales
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error generating yearly sales report',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
 	createInvoice,
 	getAllInvoices,
@@ -533,5 +589,6 @@ module.exports = {
 	searchInvoices,
 	getSalesByPrice,
 	getSalesByQuantity,
-	getMonthlySales
+	getMonthlySales,
+	getYearlySales
 };
