@@ -416,36 +416,39 @@ const searchInvoices = async (req, res) => {
 // Get Sales Report by Price
 const getSalesByPrice = async (req, res) => {
     try {
-        const salesByPrice = await Invoice.aggregate([
-            { $match: { status: 'paid' } },
-            { $unwind: '$products' },
+        const salesByProduct = await Invoice.aggregate([
+            { $match: { status: 'paid' } }, // Filter only paid invoices
+            { $unwind: '$products' }, // Deconstruct the products array
             {
                 $group: {
-                    _id: '$products.price',
-                    totalQuantity: { $sum: '$products.quantity' },
+                    _id: { name: '$products.name', price: '$products.price' }, // Group by product name & price
+                    totalQuantity: { $sum: '$products.quantity' }, // Sum total quantity sold
                     totalRevenue: { 
-                        $sum: { 
-                            $multiply: ['$products.price', '$products.quantity'] 
-                        } 
-                    },
-                    count: { $sum: 1 }
+                        $sum: { $multiply: ['$products.price', '$products.quantity'] } 
+                    } // Calculate total revenue
                 }
             },
-            { $sort: { _id: 1 } }
+            { $sort: { totalRevenue: -1 } } // Sort by revenue (highest to lowest)
         ]);
 
         res.status(200).json({
             success: true,
-            body: salesByPrice
+            body: salesByProduct.map(item => ({
+                product: item._id.name, 
+                price: item._id.price,
+                totalQuantity: item.totalQuantity, 
+                totalRevenue: item.totalRevenue
+            }))
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error generating sales by price report',
+            message: 'Error generating sales by product report',
             error: error.message
         });
     }
 };
+
 
 // Get Sales Report by Quantity
 const getSalesByQuantity = async (req, res) => {
