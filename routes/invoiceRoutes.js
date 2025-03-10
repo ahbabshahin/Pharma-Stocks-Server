@@ -11,7 +11,9 @@ const {
 	getSalesByPrice,
 	getSalesByQuantity,
 	getMonthlySales,
-	getYearlySales
+	getYearlySales,
+	getDailySalesForMonth,
+	getProductSalesForMonth
 } = require('../controllers/invoiceController');
 const {
 	authenticateUser,
@@ -27,8 +29,11 @@ router.get('/', authenticateUser, getAllInvoices);
 // Sales Report Routes
 router.get('/reports/by-price', authenticateUser, getSalesByPrice);
 router.get('/reports/by-quantity', authenticateUser, getSalesByQuantity);
-router.get('/reports/monthly', authenticateUser, getMonthlySales);
+// router.get('/reports/monthly', authenticateUser, getMonthlySales);
 router.get('/reports/yearly', authenticateUser, getYearlySales);
+router.get('/reports/daily', authenticateUser, getDailySalesForMonth);
+router.get('/reports/product-sales', authenticateUser, getProductSalesForMonth);
+
 
 // Search invoices by date range and customer
 // Query parameters:

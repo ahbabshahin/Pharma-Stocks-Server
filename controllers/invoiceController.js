@@ -485,15 +485,37 @@ const getSalesByQuantity = async (req, res) => {
 };
 
 // Get Monthly Sales Report
-const getMonthlySales = async (req, res) => {
+// Get daily sales for a specific month
+const getDailySalesForMonth = async (req, res) => {
     try {
-        const monthlySales = await Invoice.aggregate([
-            { $match: { status: 'paid' } },
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({
+                success: false,
+                message: 'Date parameter is required (YYYY-MM-DD format)'
+            });
+        }
+
+        const targetDate = new Date(date);
+        const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+        const dailySales = await Invoice.aggregate([
+            {
+                $match: {
+                    status: 'paid',
+                    createdAt: {
+                        $gte: startOfMonth,
+                        $lte: endOfMonth
+                    }
+                }
+            },
             {
                 $group: {
                     _id: {
                         year: { $year: '$createdAt' },
-                        month: { $month: '$createdAt' }
+                        month: { $month: '$createdAt' },
+                        day: { $dayOfMonth: '$createdAt' }
                     },
                     totalRevenue: { $sum: '$totalAmount' },
                     totalInvoices: { $sum: 1 },
@@ -503,24 +525,92 @@ const getMonthlySales = async (req, res) => {
             {
                 $project: {
                     _id: 0,
-                    year: '$_id.year',
-                    month: '$_id.month',
+                    date: {
+                        $dateFromParts: {
+                            year: '$_id.year',
+                            month: '$_id.month',
+                            day: '$_id.day'
+                        }
+                    },
                     totalRevenue: 1,
                     totalInvoices: 1,
                     averageInvoiceValue: 1
                 }
             },
-            { $sort: { year: 1, month: 1 } }
+            { $sort: { date: 1 } }
         ]);
 
         res.status(200).json({
             success: true,
-            body: monthlySales
+            body: dailySales
         });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Error generating monthly sales report',
+            message: 'Error generating daily sales report',
+            error: error.message
+        });
+    }
+};
+
+// Get product sales revenue for a specific month
+const getProductSalesForMonth = async (req, res) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({
+                success: false,
+                message: 'Date parameter is required (YYYY-MM-DD format)'
+            });
+        }
+
+        const targetDate = new Date(date);
+        const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+
+        const productSales = await Invoice.aggregate([
+            {
+                $match: {
+                    status: 'paid',
+                    createdAt: {
+                        $gte: startOfMonth,
+                        $lte: endOfMonth
+                    }
+                }
+            },
+            { $unwind: '$products' },
+            {
+                $group: {
+                    _id: '$products.name',
+                    totalQuantity: { $sum: '$products.quantity' },
+                    totalRevenue: {
+                        $sum: {
+                            $multiply: ['$products.price', '$products.quantity']
+                        }
+                    },
+                    averagePrice: { $avg: '$products.price' }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    productName: '$_id',
+                    totalQuantity: 1,
+                    totalRevenue: 1,
+                    averagePrice: 1
+                }
+            },
+            { $sort: { totalRevenue: -1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            body: productSales
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error generating product sales report',
             error: error.message
         });
     }
@@ -592,6 +682,7 @@ module.exports = {
 	searchInvoices,
 	getSalesByPrice,
 	getSalesByQuantity,
-	getMonthlySales,
+	getDailySalesForMonth,
+	getProductSalesForMonth,
 	getYearlySales
 };
