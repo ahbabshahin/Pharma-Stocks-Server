@@ -74,19 +74,23 @@ const getSalesByQuantity = async (req, res) => {
 // Get daily sales for a specific month
 const getDailySalesForMonth = async (req, res) => {
     try {
+        // Validate date parameter
         const { date } = req.query;
-        if (!date) {
+        if (!date || !Date.parse(date)) {
             return res.status(400).json({
                 success: false,
-                message: 'Date parameter is required (YYYY-MM-DD format)'
+                message: 'Valid date parameter is required (YYYY-MM-DD format)'
             });
         }
 
+        // Calculate start and end of month
         const targetDate = new Date(date);
         const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
 
+        // Get daily sales data
         const dailySales = await Invoice.aggregate([
+            // Match paid invoices within date range
             {
                 $match: {
                     status: 'paid',
@@ -96,6 +100,7 @@ const getDailySalesForMonth = async (req, res) => {
                     }
                 }
             },
+            // Group by date and calculate metrics
             {
                 $group: {
                     _id: {
@@ -103,19 +108,25 @@ const getDailySalesForMonth = async (req, res) => {
                         month: { $month: '$createdAt' },
                         day: { $dayOfMonth: '$createdAt' }
                     },
-                    totalRevenue: { $sum: '$totalAmount' },
+                    totalRevenue: { $sum: { $round: ['$totalAmount', 2] } },
                     totalInvoices: { $sum: 1 },
-                    averageInvoiceValue: { $avg: '$totalAmount' }
+                    averageInvoiceValue: { $round: [{ $avg: '$totalAmount' }, 2] }
                 }
             },
+            // Format the output
             {
                 $project: {
                     _id: 0,
                     date: {
-                        $dateFromParts: {
-                            year: '$_id.year',
-                            month: '$_id.month',
-                            day: '$_id.day'
+                        $dateToString: {
+                            format: '%Y-%m-%d',
+                            date: {
+                                $dateFromParts: {
+                                    year: '$_id.year',
+                                    month: '$_id.month',
+                                    day: '$_id.day'
+                                }
+                            }
                         }
                     },
                     totalRevenue: 1,
@@ -123,13 +134,24 @@ const getDailySalesForMonth = async (req, res) => {
                     averageInvoiceValue: 1
                 }
             },
+            // Sort by date ascending
             { $sort: { date: 1 } }
         ]);
+
+        // Return empty array if no data found
+        if (!dailySales.length) {
+            return res.status(200).json({
+                success: true,
+                message: 'No sales data found for the specified month',
+                body: []
+            });
+        }
 
         res.status(200).json({
             success: true,
             body: dailySales
         });
+
     } catch (error) {
         res.status(500).json({
             success: false,
