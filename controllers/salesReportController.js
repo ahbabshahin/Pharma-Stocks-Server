@@ -1,6 +1,6 @@
 const Invoice = require('../models/Invoice');
 
-const getSalesByPrice = async (req, res) => {
+const getSalesByPrice = async(req, res) => {
     try {
         const salesByProduct = await Invoice.aggregate([
             { $match: { status: 'paid' } }, // Filter only paid invoices
@@ -9,8 +9,8 @@ const getSalesByPrice = async (req, res) => {
                 $group: {
                     _id: { name: '$products.name', price: '$products.price' }, // Group by product name & price
                     totalQuantity: { $sum: '$products.quantity' }, // Sum total quantity sold
-                    totalRevenue: { 
-                        $sum: { $multiply: ['$products.price', '$products.quantity'] } 
+                    totalRevenue: {
+                        $sum: { $multiply: ['$products.price', '$products.quantity'] }
                     } // Calculate total revenue
                 }
             },
@@ -20,9 +20,9 @@ const getSalesByPrice = async (req, res) => {
         res.status(200).json({
             success: true,
             body: salesByProduct.map(item => ({
-                product: item._id.name, 
+                product: item._id.name,
                 price: item._id.price,
-                totalQuantity: item.totalQuantity, 
+                totalQuantity: item.totalQuantity,
                 totalRevenue: item.totalRevenue
             }))
         });
@@ -37,7 +37,7 @@ const getSalesByPrice = async (req, res) => {
 
 
 // Get Sales Report by Quantity
-const getSalesByQuantity = async (req, res) => {
+const getSalesByQuantity = async(req, res) => {
     try {
         const salesByQuantity = await Invoice.aggregate([
             { $match: { status: 'paid' } },
@@ -46,10 +46,10 @@ const getSalesByQuantity = async (req, res) => {
                 $group: {
                     _id: '$products.name',
                     totalQuantity: { $sum: '$products.quantity' },
-                    totalRevenue: { 
-                        $sum: { 
-                            $multiply: ['$products.price', '$products.quantity'] 
-                        } 
+                    totalRevenue: {
+                        $sum: {
+                            $multiply: ['$products.price', '$products.quantity']
+                        }
                     },
                     averagePrice: { $avg: '$products.price' }
                 }
@@ -72,21 +72,32 @@ const getSalesByQuantity = async (req, res) => {
 
 // Get Monthly Sales Report
 // Get daily sales for a specific month
-const getDailySalesForMonth = async (req, res) => {
+const getDailySalesForMonth = async(req, res) => {
     try {
         // Validate date parameter
         const { date } = req.query;
         if (!date || !Date.parse(date)) {
             return res.status(400).json({
                 success: false,
-                message: 'Valid date parameter is required (YYYY-MM-DD format)'
+                message: 'Valid date parameter is required (YYYY-MM-DD format)',
             });
         }
 
         // Calculate start and end of month
         const targetDate = new Date(date);
-        const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
-        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+        const startOfMonth = new Date(
+            targetDate.getFullYear(),
+            targetDate.getMonth(),
+            1
+        );
+        const endOfMonth = new Date(
+            targetDate.getFullYear(),
+            targetDate.getMonth() + 1,
+            0,
+            23,
+            59,
+            59
+        );
 
         // Get daily sales data
         const dailySales = await Invoice.aggregate([
@@ -96,9 +107,9 @@ const getDailySalesForMonth = async (req, res) => {
                     status: 'paid',
                     createdAt: {
                         $gte: startOfMonth,
-                        $lte: endOfMonth
-                    }
-                }
+                        $lte: endOfMonth,
+                    },
+                },
             },
             // Group by date and calculate metrics
             {
@@ -106,36 +117,38 @@ const getDailySalesForMonth = async (req, res) => {
                     _id: {
                         year: { $year: '$createdAt' },
                         month: { $month: '$createdAt' },
-                        day: { $dayOfMonth: '$createdAt' }
+                        day: { $dayOfMonth: '$createdAt' },
                     },
-                    totalRevenue: { $sum: { $round: ['$totalAmount', 2] } },
+                    totalRevenue: { $sum: '$totalAmount' },
                     totalInvoices: { $sum: 1 },
-                    averageInvoiceValue: { $round: [{ $avg: '$totalAmount' }, 2] }
-                }
+                    averageInvoiceValue: { $avg: '$totalAmount' },
+                },
             },
-            // Format the output
+            // Round values and format output
             {
                 $project: {
                     _id: 0,
                     date: {
                         $dateToString: {
-                            format: '%Y-%m-%d',
+                            format: '%d-%m-%Y',
                             date: {
                                 $dateFromParts: {
                                     year: '$_id.year',
                                     month: '$_id.month',
-                                    day: '$_id.day'
-                                }
-                            }
-                        }
+                                    day: '$_id.day',
+                                },
+                            },
+                        },
                     },
-                    totalRevenue: 1,
+                    totalRevenue: { $round: ['$totalRevenue', 2] }, // Correct usage
                     totalInvoices: 1,
-                    averageInvoiceValue: 1
-                }
+                    averageInvoiceValue: {
+                        $round: ['$averageInvoiceValue', 2],
+                    }, // Correct usage
+                },
             },
             // Sort by date ascending
-            { $sort: { date: 1 } }
+            { $sort: { date: 1 } },
         ]);
 
         // Return empty array if no data found
@@ -143,26 +156,26 @@ const getDailySalesForMonth = async (req, res) => {
             return res.status(200).json({
                 success: true,
                 message: 'No sales data found for the specified month',
-                body: []
+                body: [],
             });
         }
 
         res.status(200).json({
             success: true,
-            body: dailySales
+            body: dailySales,
         });
-
     } catch (error) {
         res.status(500).json({
             success: false,
             message: 'Error generating daily sales report',
-            error: error.message
+            error: error.message,
         });
     }
 };
 
+
 // Get product sales revenue for a specific month
-const getProductSalesForMonth = async (req, res) => {
+const getProductSalesForMonth = async(req, res) => {
     try {
         const { date } = req.query;
         if (!date) {
@@ -176,8 +189,7 @@ const getProductSalesForMonth = async (req, res) => {
         const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
         const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
 
-        const productSales = await Invoice.aggregate([
-            {
+        const productSales = await Invoice.aggregate([{
                 $match: {
                     status: 'paid',
                     createdAt: {
@@ -225,7 +237,7 @@ const getProductSalesForMonth = async (req, res) => {
 };
 
 // Get Yearly Sales Report
-const getYearlySales = async (req, res) => {
+const getYearlySales = async(req, res) => {
     try {
         const yearlySales = await Invoice.aggregate([
             { $match: { status: 'paid' } },
@@ -236,11 +248,11 @@ const getYearlySales = async (req, res) => {
                     totalInvoices: { $sum: 1 },
                     averageInvoiceValue: { $avg: '$totalAmount' },
                     // Additional product-level aggregations
-                    totalProducts: { 
-                        $sum: { $size: '$products' } 
+                    totalProducts: {
+                        $sum: { $size: '$products' }
                     },
                     totalQuantitySold: {
-                        $sum: { 
+                        $sum: {
                             $reduce: {
                                 input: '$products',
                                 initialValue: 0,
@@ -259,8 +271,8 @@ const getYearlySales = async (req, res) => {
                     averageInvoiceValue: 1,
                     totalProducts: 1,
                     totalQuantitySold: 1,
-                    averageRevenuePerProduct: { 
-                        $divide: ['$totalRevenue', '$totalProducts'] 
+                    averageRevenuePerProduct: {
+                        $divide: ['$totalRevenue', '$totalProducts']
                     }
                 }
             },
