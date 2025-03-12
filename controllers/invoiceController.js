@@ -413,6 +413,9 @@ const searchInvoices = async (req, res) => {
 	}
 };
 
+// Get Sales Report by Price
+
+
 module.exports = {
 	createInvoice,
 	getAllInvoices,
