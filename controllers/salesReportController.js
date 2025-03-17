@@ -20,8 +20,6 @@ const getSalesByPrice = async(req, res) => {
         endDate.setDate(0);
         endDate.setHours(23, 59, 59, 999);
 
-        console.log(`Start Date: ${startDate}, End Date: ${endDate}`);
-
         const salesByProduct = await Invoice.aggregate([{
                 $match: {
                     status: 'paid',
@@ -49,7 +47,8 @@ const getSalesByPrice = async(req, res) => {
             { $sort: { totalRevenue: -1 } },
         ]);
 
-        console.log(`Sales By Product: ${JSON.stringify(salesByProduct)}`);
+        // Calculate total revenue for the month
+        const totalRevenueForMonth = salesByProduct.reduce((acc, item) => acc + item.totalRevenue, 0);
 
         res.status(200).json({
             success: true,
@@ -60,7 +59,8 @@ const getSalesByPrice = async(req, res) => {
                 totalRevenue: item.totalRevenue,
                 month: startDate.toLocaleString('default', { month: 'long' }),
                 year: startDate.getFullYear()
-            }))
+            })),
+            total: totalRevenueForMonth, // Include total revenue for the month
         });
     } catch (error) {
         res.status(500).json({
@@ -196,9 +196,13 @@ const getDailySalesForMonth = async(req, res) => {
             });
         }
 
+        // Calculate total revenue for the month
+        const totalMonthlyRevenue = dailySales.reduce((acc, day) => acc + day.totalRevenue, 0);
+
         res.status(200).json({
             success: true,
             body: dailySales,
+            total: totalMonthlyRevenue, // Include total revenue for the month
         });
     } catch (error) {
         res.status(500).json({
