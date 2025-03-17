@@ -2,20 +2,53 @@ const Invoice = require('../models/Invoice');
 
 const getSalesByPrice = async(req, res) => {
     try {
-        const salesByProduct = await Invoice.aggregate([
-            { $match: { status: 'paid' } }, // Filter only paid invoices
-            { $unwind: '$products' }, // Deconstruct the products array
+        const { date } = req.query;
+        if (!date || !Date.parse(date)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid date parameter is required (YYYY-MM-DD format)',
+            });
+        }
+
+        // Create start and end dates for the month
+        const startDate = new Date(date);
+        startDate.setDate(1);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(date);
+        endDate.setMonth(endDate.getMonth() + 1);
+        endDate.setDate(0);
+        endDate.setHours(23, 59, 59, 999);
+
+        const salesByProduct = await Invoice.aggregate([{
+                $match: {
+                    status: 'paid',
+                    createdAt: {
+                        $gte: startDate,
+                        $lte: endDate,
+                    },
+                },
+            },
+            { $unwind: '$products' },
             {
                 $group: {
-                    _id: { name: '$products.name', price: '$products.price' }, // Group by product name & price
-                    totalQuantity: { $sum: '$products.quantity' }, // Sum total quantity sold
+                    _id: { name: '$products.name', price: '$products.price' },
+                    totalQuantity: { $sum: '$products.quantity' },
                     totalRevenue: {
-                        $sum: { $multiply: ['$products.price', '$products.quantity'] }
-                    } // Calculate total revenue
-                }
+                        $sum: {
+                            $multiply: [
+                                '$products.price',
+                                '$products.quantity',
+                            ],
+                        },
+                    },
+                },
             },
-            { $sort: { totalRevenue: -1 } } // Sort by revenue (highest to lowest)
+            { $sort: { totalRevenue: -1 } },
         ]);
+
+        // Calculate total revenue for the month
+        const totalRevenueForMonth = salesByProduct.reduce((acc, item) => acc + item.totalRevenue, 0);
 
         res.status(200).json({
             success: true,
@@ -23,8 +56,11 @@ const getSalesByPrice = async(req, res) => {
                 product: item._id.name,
                 price: item._id.price,
                 totalQuantity: item.totalQuantity,
-                totalRevenue: item.totalRevenue
-            }))
+                totalRevenue: item.totalRevenue,
+                month: startDate.toLocaleString('default', { month: 'long' }),
+                year: startDate.getFullYear()
+            })),
+            total: totalRevenueForMonth, // Include total revenue for the month
         });
     } catch (error) {
         res.status(500).json({
@@ -160,9 +196,13 @@ const getDailySalesForMonth = async(req, res) => {
             });
         }
 
+        // Calculate total revenue for the month
+        const totalMonthlyRevenue = dailySales.reduce((acc, day) => acc + day.totalRevenue, 0);
+
         res.status(200).json({
             success: true,
             body: dailySales,
+            total: totalMonthlyRevenue, // Include total revenue for the month
         });
     } catch (error) {
         res.status(500).json({
