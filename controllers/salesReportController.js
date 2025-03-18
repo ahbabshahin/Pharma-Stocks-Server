@@ -75,8 +75,28 @@ const getSalesByPrice = async(req, res) => {
 // Get Sales Report by Quantity
 const getSalesByQuantity = async(req, res) => {
     try {
-        const salesByQuantity = await Invoice.aggregate([
-            { $match: { status: 'paid' } },
+        const { date } = req.query;
+        if (!date || !Date.parse(date)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid date parameter is required (YYYY-MM-DD format)',
+            });
+        }
+
+        // Parse the input date
+        const targetDate = new Date(date);
+        const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+        const salesByQuantity = await Invoice.aggregate([{
+                $match: {
+                    status: 'paid',
+                    createdAt: {
+                        $gte: startOfMonth,
+                        $lte: endOfMonth,
+                    },
+                },
+            },
             { $unwind: '$products' },
             {
                 $group: {
@@ -84,24 +104,36 @@ const getSalesByQuantity = async(req, res) => {
                     totalQuantity: { $sum: '$products.quantity' },
                     totalRevenue: {
                         $sum: {
-                            $multiply: ['$products.price', '$products.quantity']
-                        }
+                            $multiply: ['$products.price', '$products.quantity'],
+                        },
                     },
-                    averagePrice: { $avg: '$products.price' }
-                }
+                    averagePrice: { $avg: '$products.price' },
+                },
             },
-            { $sort: { totalQuantity: -1 } }
+            { $sort: { totalQuantity: -1 } },
         ]);
+
+        // Calculate total quantity sold across all products
+        const totalQuantitySold = salesByQuantity.reduce((acc, item) => acc + item.totalQuantity, 0);
+
+        // Map the response to include product name under the key 'product'
+        const responseBody = salesByQuantity.map(item => ({
+            product: item._id, // Set product name here
+            totalQuantity: item.totalQuantity,
+            totalRevenue: item.totalRevenue,
+            averagePrice: item.averagePrice,
+        }));
 
         res.status(200).json({
             success: true,
-            body: salesByQuantity
+            body: responseBody,
+            total: totalQuantitySold, // Include total quantity in the response
         });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: 'Error generating sales by quantity report',
-            error: error.message
+            error: error.message,
         });
     }
 };
@@ -332,10 +364,99 @@ const getYearlySales = async(req, res) => {
     }
 };
 
+const getDailySoldProductForMonth = async(req, res) => {
+    try {
+        const { date } = req.query;
+        if (!date || !Date.parse(date)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid date parameter is required (YYYY-MM-DD format)',
+            });
+        }
+
+        // Parse the input date
+        const targetDate = new Date(date);
+        const startOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+        const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0, 23, 59, 59);
+
+        // Get daily sold quantities
+        const dailySales = await Invoice.aggregate([{
+                $match: {
+                    status: 'paid',
+                    createdAt: {
+                        $gte: startOfMonth,
+                        $lte: endOfMonth,
+                    },
+                },
+            },
+            { $unwind: '$products' },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createdAt' },
+                        month: { $month: '$createdAt' },
+                        day: { $dayOfMonth: '$createdAt' },
+                        productName: '$products.name',
+                    },
+                    totalQuantity: { $sum: '$products.quantity' },
+                },
+            },
+            {
+                $group: {
+                    _id: { year: '$_id.year', month: '$_id.month', day: '$_id.day' },
+                    products: {
+                        $push: {
+                            productName: '$_id.productName',
+                            totalQuantity: '$totalQuantity',
+                        },
+                    },
+                    totalQuantityForDay: { $sum: '$totalQuantity' },
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    date: {
+                        $dateToString: {
+                            format: '%Y-%m-%d',
+                            date: {
+                                $dateFromParts: {
+                                    year: '$_id.year',
+                                    month: '$_id.month',
+                                    day: '$_id.day',
+                                },
+                            },
+                        },
+                    },
+                    products: 1,
+                    totalQuantityForDay: 1,
+                },
+            },
+            { $sort: { date: 1 } },
+        ]);
+
+        // Calculate total quantity sold for the month
+        const totalQuantitySoldForMonth = dailySales.reduce((acc, day) => acc + day.totalQuantityForDay, 0);
+
+        res.status(200).json({
+            success: true,
+            body: dailySales,
+            total: totalQuantitySoldForMonth, // Include total quantity sold for the month
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error generating daily sold product report for the month',
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
     getSalesByPrice,
     getSalesByQuantity,
     getDailySalesForMonth,
     getProductSalesForMonth,
-    getYearlySales
+    getYearlySales,
+    getDailySoldProductForMonth,
 };
