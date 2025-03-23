@@ -34,39 +34,70 @@ const getSalesByPrice = async(req, res) => {
                 $group: {
                     _id: { name: '$products.name', price: '$products.price' },
                     totalQuantity: { $sum: '$products.quantity' },
-                    totalRevenue: {
+                    grossRevenue: {
                         $sum: {
                             $multiply: [
                                 '$products.price',
                                 '$products.quantity',
                             ],
                         },
+                    }, // Revenue before discount
+                    totalDiscount: {
+                        $sum: {
+                            $multiply: [
+                                '$discount',
+                                {
+                                    $divide: [{
+                                            $multiply: [
+                                                '$products.price',
+                                                '$products.quantity'
+                                            ]
+                                        },
+                                        100,
+                                    ],
+                                },
+                            ],
+                        },
                     },
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    product: '$_id.name',
+                    price: '$_id.price',
+                    totalQuantity: 1,
+                    totalRevenue: {
+                        $subtract: ['$grossRevenue', '$totalDiscount'],
+                    }, // Deduct discount
                 },
             },
             { $sort: { totalRevenue: -1 } },
         ]);
 
-        // Calculate total revenue for the month
-        const totalRevenueForMonth = salesByProduct.reduce((acc, item) => acc + item.totalRevenue, 0);
+        // Calculate total revenue for the month after discount
+        const totalRevenueForMonth = salesByProduct.reduce(
+            (acc, item) => acc + item.totalRevenue,
+            0
+        );
 
         res.status(200).json({
             success: true,
-            body: salesByProduct.map(item => ({
-                product: item._id.name,
-                price: item._id.price,
+            body: salesByProduct.map((item) => ({
+                product: item.product,
+                price: item.price,
                 totalQuantity: item.totalQuantity,
                 totalRevenue: item.totalRevenue,
                 month: startDate.toLocaleString('default', { month: 'long' }),
-                year: startDate.getFullYear()
+                year: startDate.getFullYear(),
             })),
-            total: totalRevenueForMonth, // Include total revenue for the month
+            total: totalRevenueForMonth, // Include total revenue after discount
         });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: 'Error generating sales by product report',
-            error: error.message
+            error: error.message,
         });
     }
 };

@@ -6,16 +6,20 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const Customer = require('../models/Customer');
 
-const calculateTotal = (products, discountRate) => {
+const calculateTotal = (products, discountRate = 0) => {
     const subtotal = products.reduce((acc, product) => {
-        return acc + (product.price * product.quantity);
+        return acc + product.price * product.quantity;
     }, 0);
 
+    // Ensure discountRate is a valid number
+    const validDiscountRate =
+        isNaN(discountRate) || discountRate < 0 ? 0 : discountRate;
+
     // Calculate discount and deduct it from subtotal
-    const discountAmount = (subtotal * discountRate) / 100;
+    const discountAmount = (subtotal * validDiscountRate) / 100;
     const total = subtotal - discountAmount;
 
-    return { subtotal, total };
+    return { subtotal, total, discountAmount };
 };
 
 // Create Invoice
