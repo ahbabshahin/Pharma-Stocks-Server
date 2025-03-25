@@ -219,6 +219,7 @@ const getDailySalesForMonth = async(req, res) => {
                         day: { $dayOfMonth: '$createdAt' },
                     },
                     totalRevenue: { $sum: '$totalAmount' },
+                    totalQuantity: { $sum: { $sum: '$products.quantity' } }, // Total quantity of products sold
                     totalInvoices: { $sum: 1 },
                     averageInvoiceValue: { $avg: '$totalAmount' },
                 },
@@ -241,6 +242,7 @@ const getDailySalesForMonth = async(req, res) => {
                     },
                     totalRevenue: { $round: ['$totalRevenue', 2] }, // Correct usage
                     totalInvoices: 1,
+                    totalQuantity: 1,
                     averageInvoiceValue: {
                         $round: ['$averageInvoiceValue', 2],
                     }, // Correct usage
@@ -261,11 +263,16 @@ const getDailySalesForMonth = async(req, res) => {
 
         // Calculate total revenue for the month
         const totalMonthlyRevenue = dailySales.reduce((acc, day) => acc + day.totalRevenue, 0);
+        const totalMonthlyProductSale = dailySales.reduce(
+            (acc, day) => acc + day.totalQuantity,
+            0
+        );
 
         res.status(200).json({
             success: true,
             body: dailySales,
             total: totalMonthlyRevenue, // Include total revenue for the month
+            totalQuantity: totalMonthlyProductSale, // Include total quantity sold for the month
         });
     } catch (error) {
         res.status(500).json({
