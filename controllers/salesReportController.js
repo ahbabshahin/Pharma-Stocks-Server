@@ -349,58 +349,83 @@ const getProductSalesForMonth = async(req, res) => {
 // Get Yearly Sales Report
 const getYearlySales = async(req, res) => {
     try {
-        const yearlySales = await Invoice.aggregate([
-            { $match: { status: 'paid' } },
+        const { year } = req.query;
+        if (!year || isNaN(year)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Valid year parameter is required (YYYY format)',
+            });
+        }
+
+        const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+        const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
+
+        const monthlySales = await Invoice.aggregate([{
+                $match: {
+                    status: 'paid',
+                    createdAt: {
+                        $gte: startOfYear,
+                        $lte: endOfYear,
+                    },
+                },
+            },
             {
                 $group: {
-                    _id: { year: { $year: '$createdAt' } },
+                    _id: { month: { $month: '$createdAt' } },
                     totalRevenue: { $sum: '$totalAmount' },
-                    totalInvoices: { $sum: 1 },
-                    averageInvoiceValue: { $avg: '$totalAmount' },
-                    // Additional product-level aggregations
-                    totalProducts: {
-                        $sum: { $size: '$products' }
-                    },
                     totalQuantitySold: {
                         $sum: {
                             $reduce: {
                                 input: '$products',
                                 initialValue: 0,
-                                in: { $add: ['$$value', '$$this.quantity'] }
-                            }
-                        }
-                    }
-                }
+                                in: { $add: ['$$value', '$$this.quantity'] },
+                            },
+                        },
+                    },
+                },
             },
             {
                 $project: {
                     _id: 0,
-                    year: '$_id.year',
+                    month: '$_id.month',
                     totalRevenue: 1,
-                    totalInvoices: 1,
-                    averageInvoiceValue: 1,
-                    totalProducts: 1,
                     totalQuantitySold: 1,
-                    averageRevenuePerProduct: {
-                        $divide: ['$totalRevenue', '$totalProducts']
-                    }
-                }
+                },
             },
-            { $sort: { year: 1 } }
+            { $sort: { month: 1 } },
         ]);
+
+        // Calculate total revenue and total quantity for the year
+        const totalRevenueForYear = monthlySales.reduce(
+            (acc, item) => acc + item.totalRevenue,
+            0
+        );
+        const totalQuantityForYear = monthlySales.reduce(
+            (acc, item) => acc + item.totalQuantitySold,
+            0
+        );
 
         res.status(200).json({
             success: true,
-            body: yearlySales
+            body: monthlySales.map((item) => ({
+                month: new Date(year, item.month - 1, 1).toLocaleString(
+                    'default', { month: 'long' }
+                ),
+                totalRevenue: item.totalRevenue,
+                totalQuantity: item.totalQuantitySold,
+            })),
+            totalRevenue: totalRevenueForYear,
+            totalQuantitySold: totalQuantityForYear,
         });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: 'Error generating yearly sales report',
-            error: error.message
+            error: error.message,
         });
     }
 };
+
 
 const getDailySoldProductForMonth = async(req, res) => {
     try {
