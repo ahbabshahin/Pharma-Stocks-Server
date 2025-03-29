@@ -414,8 +414,8 @@ const getYearlySales = async(req, res) => {
                 totalRevenue: item.totalRevenue,
                 totalQuantity: item.totalQuantitySold,
             })),
-            totalRevenue: totalRevenueForYear,
-            totalQuantitySold: totalQuantityForYear,
+            total: totalRevenueForYear,
+            totalQuantity: totalQuantityForYear,
         });
     } catch (error) {
         res.status(500).json({
