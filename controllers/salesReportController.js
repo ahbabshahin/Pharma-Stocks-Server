@@ -174,7 +174,7 @@ const getSalesByQuantity = async(req, res) => {
 const getDailySalesForMonth = async(req, res) => {
     try {
         // Validate date parameter
-        const { date } = req.query;
+        const { date, status } = req.query;
         if (!date || !Date.parse(date)) {
             return res.status(400).json({
                 success: false,
@@ -203,7 +203,7 @@ const getDailySalesForMonth = async(req, res) => {
             // Match paid invoices within date range
             {
                 $match: {
-                    status: 'paid',
+                    status: status,
                     createdAt: {
                         $gte: startOfMonth,
                         $lte: endOfMonth,
