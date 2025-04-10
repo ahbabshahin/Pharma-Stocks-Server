@@ -5,7 +5,7 @@ const { isTokenValid } = require('../utils');
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const Customer = require('../models/Customer');
-
+const config = require("../config/constants");
 const calculateTotal = (products, discountRate = 0) => {
     const subtotal = products.reduce((acc, product) => {
         return acc + product.price * product.quantity;
@@ -295,17 +295,30 @@ const updateInvoice = async(req, res) => {
 const deleteInvoice = async (req, res) => {
 	const { id } = req.params;
 	try {
-		const invoice = await Invoice.findByIdAndDelete(id);
+		const invoice = await Invoice.findById(id);
 		if (!invoice) {
 			throw new CustomError.NotFoundError(
 				`No invoice found with id: ${id}`
 			);
 		}
 
-		// await invoice.remove();
+		// Restore stock for each product in the invoice if it's a due
+        if (invoice.status === 'due'){
+			for (const product of invoice.products) {
+				const stockItem = await Stock.findById(product._id);
+				if (stockItem) {
+					stockItem.quantity += product.quantity;
+					await stockItem.save();
+				}
+			}
+        }
+		// Delete the invoice
+		await Invoice.findByIdAndDelete(id);
+
 		res.status(204).send();
 	} catch (error) {
-		res.status(500).json({ message: 'Server error', error });
+		console.error('Error deleting invoice:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
 	}
 };
 
