@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-
+const config = require('../config/constants');
 // Register user
 const registerUser = async (req, res) => {
 	const { name, username, email, password } = req.body;
@@ -20,7 +20,7 @@ const registerUser = async (req, res) => {
 
 		// Determine role for the first user
 		const isFirstUser = (await User.countDocuments()) === 0;
-		const role = isFirstUser ? 'admin' : 'user';
+		const role = isFirstUser ? 'admin' : config.DEFAULT_ROLE;
 
 		// Hash password and save user
 		const hashedPassword = await bcrypt.hash(password, 10);
