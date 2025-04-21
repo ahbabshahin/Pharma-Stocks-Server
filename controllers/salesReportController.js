@@ -1,5 +1,121 @@
 const Invoice = require('../models/Invoice');
 
+const getProductReport = async (req, res) => {
+	try {
+		const { date } = req.query;
+		if (!date || !Date.parse(date)) {
+			return res.status(400).json({
+				success: false,
+				message: 'Valid date parameter is required (YYYY-MM-DD format)',
+			});
+		}
+
+		// Create start and end dates for the month
+		const startDate = new Date(date);
+		startDate.setDate(1);
+		startDate.setHours(0, 0, 0, 0);
+
+		const endDate = new Date(date);
+		endDate.setMonth(endDate.getMonth() + 1);
+		endDate.setDate(0);
+		endDate.setHours(23, 59, 59, 999);
+
+		const salesByProduct = await Invoice.aggregate([
+			{
+				$match: {
+					status: 'paid',
+					createdAt: {
+						$gte: startDate,
+						$lte: endDate,
+					},
+				},
+			},
+			{ $unwind: '$products' },
+			{
+				$group: {
+					_id: {
+						name: '$products.name',
+						price: '$products.price',
+						discount: '$discount',
+					},
+					totalQuantity: { $sum: '$products.quantity' },
+					grossRevenue: {
+						$sum: {
+							$multiply: [
+								'$products.price',
+								'$products.quantity',
+							],
+						},
+					}, // Revenue before discount
+					totalDiscount: {
+						$sum: {
+							$multiply: [
+								'$discount',
+								{
+									$divide: [
+										{
+											$multiply: [
+												'$products.price',
+												'$products.quantity',
+											],
+										},
+										100,
+									],
+								},
+							],
+						},
+					},
+				},
+			},
+			{
+				$project: {
+					_id: 0,
+					product: '$_id.name',
+					price: '$_id.price',
+                    discount: '$_id.discount',
+					totalQuantity: 1,
+					totalRevenue: {
+						$subtract: ['$grossRevenue', '$totalDiscount'],
+					}, // Deduct discount
+				},
+			},
+			{ $sort: { totalRevenue: -1 } },
+		]);
+
+		// Calculate total revenue for the month after discount
+		const totalRevenueForMonth = salesByProduct.reduce(
+			(acc, item) => acc + item.totalRevenue,
+			0
+		);
+		const totalQuantityForMonth = salesByProduct.reduce(
+			(acc, item) => acc + item.totalQuantity,
+			0
+		);
+
+		res.status(200).json({
+			success: true,
+			body: salesByProduct.map((item) => ({
+				product: item.product,
+				price: item.price,
+                discount: item.discount,
+				totalQuantity: item.totalQuantity,
+				totalRevenue: item.totalRevenue,
+				month: startDate.toLocaleString('default', { month: 'long' }),
+				year: startDate.getFullYear(),
+			})),
+			total: totalRevenueForMonth, // Include total revenue after discount
+			totalQuantity: totalQuantityForMonth,
+		});
+	} catch (error) {
+		res.status(500).json({
+			success: false,
+			message: 'Error generating sales by product report',
+			error: error.message,
+		});
+	}
+};
+
+
 const getSalesByPrice = async(req, res) => {
     try {
         const { date } = req.query;
@@ -80,19 +196,24 @@ const getSalesByPrice = async(req, res) => {
             (acc, item) => acc + item.totalRevenue,
             0
         );
+        const totalQuantityForMonth = salesByProduct.reduce(
+			(acc, item) => acc + item.totalQuantity,
+			0
+		);
 
         res.status(200).json({
-            success: true,
-            body: salesByProduct.map((item) => ({
-                product: item.product,
-                price: item.price,
-                totalQuantity: item.totalQuantity,
-                totalRevenue: item.totalRevenue,
-                month: startDate.toLocaleString('default', { month: 'long' }),
-                year: startDate.getFullYear(),
-            })),
-            total: totalRevenueForMonth, // Include total revenue after discount
-        });
+			success: true,
+			body: salesByProduct.map((item) => ({
+				product: item.product,
+				price: item.price,
+				totalQuantity: item.totalQuantity,
+				totalRevenue: item.totalRevenue,
+				month: startDate.toLocaleString('default', { month: 'long' }),
+				year: startDate.getFullYear(),
+			})),
+			total: totalRevenueForMonth, // Include total revenue after discount
+			totalQuantity: totalQuantityForMonth,
+		});
     } catch (error) {
         res.status(500).json({
             success: false,
@@ -516,6 +637,7 @@ const getDailySoldProductForMonth = async(req, res) => {
 };
 
 module.exports = {
+    getProductReport,
     getSalesByPrice,
     getSalesByQuantity,
     getDailySalesForMonth,
