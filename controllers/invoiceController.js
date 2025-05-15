@@ -23,128 +23,152 @@ const calculateTotal = (products, discountRate = 0) => {
 };
 
 // Create Invoice
-const createInvoice = async(req, res) => {
-    const {
-        products,
-        customer,
-        sendPDF,
-        status,
-        sn,
-        discount,
-        totalAmount,
-        activity_log,
-    } = req.body;
-    console.log("products: ", products);
+const createInvoice = async (req, res) => {
+	const {
+		products,
+		customer,
+		sendPDF,
+		status,
+		sn,
+		discount,
+		totalAmount,
+		activity_log,
+	} = req.body;
 
-    if (!products || !customer) {
-        throw new CustomError.BadRequestError("Products and customer are required");
-    }
+	if (!products || !customer) {
+		return res
+			.status(400)
+			.json({ message: 'Products and customer are required' });
+	}
 
-    try {
-        // Check if the customer exists
-        const existingCustomer = await Customer.findById(customer);
-        if (!existingCustomer) {
-            throw new CustomError.NotFoundError(
-                `Customer with ID "${customer}" not found`
-            );
-        }
+	try {
+		// Check if the customer exists
+		const existingCustomer = await Customer.findById(customer);
+		if (!existingCustomer) {
+			return res
+				.status(404)
+				.json({ message: `Customer with ID "${customer}" not found` });
+		}
 
-        // Check stock availability and update quantities
-        for (const product of products) {
-            const stock = await Stock.findById(product._id);
-            console.log("stock: ", stock);
+		// Check stock availability first
+		const insufficientStock = [];
+		for (const product of products) {
+			const stock = await Stock.findById(product._id);
 
-            if (!stock) {
-                res.status(404).json({
-                    message: `Product "${product.name}" not found in stock`,
-                });
-            } else if (product.quantity > stock.quantity) {
-                res.status(500).json({
-                    message: `Insufficient stock for product "${product.name}". Available quantity: ${stock.quantity}`,
-                });
-            }
+			if (!stock) {
+				insufficientStock.push(
+					`Product "${product.name}" not found in stock`
+				);
+			} else if (product.quantity > stock.quantity) {
+				insufficientStock.push(
+					`Insufficient stock for "${product.name}". Available: ${stock.quantity}, Requested: ${product.quantity}`
+				);
+			}
+		}
 
-            // Calculate the new stock quantity
-            const updatedQuantity = stock.quantity - product.quantity;
+		// If any stock issue exists, return error response
+		if (insufficientStock.length > 0) {
+			return res.status(400).json({
+				message: 'Stock check failed',
+				errors: insufficientStock,
+			});
+		}
 
-            // Update stock directly with `$set`
-            await Stock.findByIdAndUpdate(
-                product._id, { $set: { quantity: updatedQuantity } }, { new: true }
-            );
-        }
+		// Update stock quantities after successful check
+		for (const product of products) {
+			const stock = await Stock.findById(product._id);
 
-        // Calculate total and subtotal
-        const { subtotal, total } = calculateTotal(products, discount);
-        if (totalAmount !== total) {
-            res.status(500).json({ message: "Total amount is wrong", error });
-        }
+			const updatedQuantity = stock.quantity - product.quantity;
 
-        // Initialize activity log with creation entry
-        const initialActivityLog = [{
-                name: req.user.name || "System", // Add name field
-                action: "created",
-                when: new Date(),
-                user: req.user.userId,
-                description: "Invoice created",
-            },
-            ...(activity_log || []).map((log) => ({
-                ...log,
-                name: log.name || req.user.name || "System", // Ensure all logs have a name
-            })),
-        ];
+			await Stock.findByIdAndUpdate(
+				product._id,
+				{ $set: { quantity: updatedQuantity } },
+				{ new: true }
+			);
+		}
 
-        // Create the invoice
-        const invoice = await Invoice.create({
-            user: req.user.userId,
-            status,
-            products,
-            customer,
-            totalAmount,
-            sn,
-            discount,
-            activity_log: initialActivityLog,
-        });
+		// Calculate total and subtotal
+		const { subtotal, total } = calculateTotal(products, discount);
 
-        // Update the customer's invoices array
-        existingCustomer.invoices.push(invoice._id);
-        await existingCustomer.save();
+		if (totalAmount !== total) {
+			return res.status(400).json({ message: 'Total amount mismatch' });
+		}
 
-        // Generate PDF if requested
-        if (sendPDF) {
-            await generatePDF(invoice);
-        }
+		// Initialize activity log
+		const initialActivityLog = [
+			{
+				name: req.user.name || 'System',
+				action: 'created',
+				when: new Date(),
+				user: req.user.userId,
+				description: 'Invoice created',
+			},
+			...(activity_log || []).map((log) => ({
+				...log,
+				name: log.name || req.user.name || 'System',
+			})),
+		];
 
-        res.status(201).json({ body: invoice });
-    } catch (error) {
-        console.error("Error creating invoice:", error);
-        res.status(500).json({ message: "Server error", error });
-    }
+		// Create the invoice
+		const invoice = await Invoice.create({
+			user: req.user.userId,
+			status,
+			products,
+			customer,
+			totalAmount,
+			sn,
+			discount,
+			activity_log: initialActivityLog,
+		});
+
+		// Update the customer's invoices array
+		existingCustomer.invoices.push(invoice._id);
+		await existingCustomer.save();
+
+		// Generate PDF if requested
+		// if (sendPDF) {
+		// 	await generatePDF(invoice);
+		// }
+
+		res.status(201).json({ body: invoice });
+	} catch (error) {
+		console.error('Error creating invoice:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
+	}
 };
 
 // Get All Invoices with Pagination and Filtering
-const getAllInvoices = async(req, res) => {
-    const { status, user, customer } = req.query;
+const getAllInvoices = async (req, res) => {
+	const { status, user, customer } = req.query;
 
-    const page = parseInt(req.query.page, 10) || 1; // Default to page 1
-    const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
+	const page = parseInt(req.query.page, 10) || 1; // Default to page 1
+	const limit = parseInt(req.query.limit, 10) || 10; // Default to limit 10
 
-    const queryObject = {};
-    // if (status) queryObject.status = status;
-    if (user) queryObject.user = user;
-    if (customer) queryObject.customer = { $regex: customer, $options: 'i' }; // case-insensitive search
+	const queryObject = {};
+	// if (status) queryObject.status = status;
+	if (user) queryObject.user = user;
+	if (customer) queryObject.customer = { $regex: customer, $options: 'i' }; // case-insensitive search
 
-    const invoices = await Invoice.find(queryObject)
-        .skip((page - 1) * limit)
-        .limit(Number(limit))
-        .populate('user', 'username email'); // Optional: populate user data
+	try {
+		const invoices = await Invoice.find(queryObject)
+			.sort({ createdAt: -1 }) // Sort by latest
+			.skip((page - 1) * limit)
+			.limit(Number(limit))
+			.populate('user', 'username email');
 
-    const totalInvoices = await Invoice.countDocuments(queryObject);
-    res.status(200).json({
-        body: invoices,
-        total: totalInvoices,
-        page: Number(page),
-    });
+		const totalInvoices = await Invoice.countDocuments(queryObject);
+
+		res.status(200).json({
+			body: invoices,
+			total: totalInvoices,
+			page: Number(page),
+		});
+	} catch (error) {
+		console.error('Error fetching invoices:', error);
+		res.status(500).json({ message: 'Server error', error: error.message });
+	}
 };
+
 
 // Get Single Invoice
 const getInvoice = async(req, res) => {
@@ -162,104 +186,126 @@ const getInvoice = async(req, res) => {
 };
 
 // Update Invoice (Admin only)
-const updateInvoice = async(req, res) => {
-        const { id } = req.params;
-        let updateFields = req.body; // Contains all fields to update
+const updateInvoice = async (req, res) => {
+	const { id } = req.params;
+	let updateFields = req.body; // Contains all fields to update
 
-        try {
-            // Admin authorization
-            if (req.user.role !== 'admin') {
-                throw new CustomError.UnauthorizedError(
-                    'Only admin users can update invoices'
-                );
-            }
+	try {
+		// Admin authorization
+		if (req.user.role !== 'admin') {
+			throw new CustomError.UnauthorizedError(
+				'Only admin users can update invoices'
+			);
+		}
 
-            // Ensure `_id` is not updated
-            if (updateFields._id) {
-                delete updateFields._id;
-            }
+		// Ensure `_id` is not updated
+		if (updateFields._id) {
+			delete updateFields._id;
+		}
 
-            // Add activity log entry for the update
-            const existingInvoice = await Invoice.findById(id);
-            if (!existingInvoice) {
-                throw new CustomError.NotFoundError(
-                    `No invoice found with ID: ${id}`
-                );
-            }
+		// Fetch the existing invoice
+		const existingInvoice = await Invoice.findById(id);
+		if (!existingInvoice) {
+			throw new CustomError.NotFoundError(
+				`No invoice found with ID: ${id}`
+			);
+		}
 
-            // Check for product quantity changes and update stock
-            if (updateFields.products) {
-                for (const updatedProduct of updateFields.products) {
-                    const existingProduct = existingInvoice.products.find(
-                        (p) => p._id === updatedProduct._id
-                    );
+		// Check for product quantity changes
+		if (updateFields.products) {
+			const insufficientStock = [];
+			const quantityChanges = [];
 
-                    if (existingProduct) {
-                        const quantityDiff =
-                            updatedProduct.quantity - existingProduct.quantity;
+			for (const updatedProduct of updateFields.products) {
+				const existingProduct = existingInvoice.products.find(
+					(p) => p._id === updatedProduct._id
+				);
 
-                        if (quantityDiff !== 0) {
-                            // Find the product in inventory and update stock
-                            const product = await Stock.findById(
-                                updatedProduct._id
-                            );
-                            if (product) {
-                                // If quantity increased, decrease stock
-                                // If quantity decreased, increase stock
-                                product.quantity -= quantityDiff;
+				if (existingProduct) {
+					const quantityDiff =
+						updatedProduct.quantity - existingProduct.quantity;
 
-                                if (product.quantity < 0) {
-                                    throw new Error(
-                                        `Insufficient stock for product: ${product.name}`
-                                    );
-                                }
+					if (quantityDiff !== 0) {
+						const product = await Stock.findById(
+							updatedProduct._id
+						);
 
-                                await product.save();
-                            }
-                        }
-                    }
-                }
-            }
+						if (!product) {
+							insufficientStock.push(
+								`Product "${updatedProduct.name}" not found in stock`
+							);
+						} else if (product.quantity - quantityDiff < 0) {
+							insufficientStock.push(
+								`Insufficient stock for "${updatedProduct.name}". Available: ${product.quantity}, Requested Change: ${quantityDiff}`
+							);
+						} else {
+							quantityChanges.push({ product, quantityDiff });
+						}
+					}
+				}
+			}
 
-            // Create update activity log entry
-            const updateActivityLog = {
-                    action: 'updated',
-                    when: new Date(),
-                    user: req.user.userId,
-                    name: req.user.name,
-                    description: `Invoice updated with changes: ${
-				updateFields.amount && updateFields.amount !== existingInvoice.amount
+			// If any stock issue exists, return error response
+			if (insufficientStock.length > 0) {
+				return res.status(400).json({
+					message: 'Stock check failed',
+					errors: insufficientStock,
+				});
+			}
+
+			// Update stock after successful check
+			for (const { product, quantityDiff } of quantityChanges) {
+				product.quantity -= quantityDiff;
+				await product.save();
+			}
+		}
+
+		// Create update activity log entry
+		const updateActivityLog = {
+			action: 'updated',
+			when: new Date(),
+			user: req.user.userId,
+			name: req.user.name,
+			description: `Invoice updated with changes: ${
+				updateFields.amount &&
+				updateFields.amount !== existingInvoice.amount
 					? `Amount changed from ${existingInvoice.amount} to ${updateFields.amount}. `
 					: ''
 			}${
 				updateFields.products
 					? `Products updated: ${updateFields.products
-							.map(
-								(p) => {
-									const existingProd = existingInvoice.products.find(
+							.map((p) => {
+								const existingProd =
+									existingInvoice.products.find(
 										(ep) => ep._id === p._id
 									);
-									if (existingProd && existingProd.quantity !== p.quantity) {
-										return `${p.name || 'Product'} quantity ${existingProd.quantity} -> ${p.quantity}`;
-									}
-									return null;
+								if (
+									existingProd &&
+									existingProd.quantity !== p.quantity
+								) {
+									return `${p.name || 'Product'} quantity ${
+										existingProd.quantity
+									} -> ${p.quantity}`;
 								}
-							)
+								return null;
+							})
 							.filter(Boolean)
 							.join(', ')}. `
 					: ''
 			}${
-				updateFields.status && updateFields.status !== existingInvoice.status
+				updateFields.status &&
+				updateFields.status !== existingInvoice.status
 					? `Status changed from ${existingInvoice.status} to ${updateFields.status}. `
 					: ''
 			}${
-				updateFields.dueDate && updateFields.dueDate !== existingInvoice.dueDate
+				updateFields.dueDate &&
+				updateFields.dueDate !== existingInvoice.dueDate
 					? `Due date changed from ${existingInvoice.dueDate} to ${updateFields.dueDate}. `
 					: ''
 			}`.trim(),
 		};
 
-		// Merge existing activity log with new log entry and any additional logs from request
+		// Merge activity logs
 		const updatedActivityLog = [
 			...(existingInvoice.activity_log || []),
 			updateActivityLog,
@@ -289,6 +335,7 @@ const updateInvoice = async(req, res) => {
 		});
 	}
 };
+
 
 
 // Delete Invoice
