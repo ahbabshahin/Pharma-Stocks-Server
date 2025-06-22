@@ -2,16 +2,16 @@ const mongoose = require('mongoose');
 const activityLogSchema = require('./ActivityLog');
 
 const customerSchema = new mongoose.Schema({
-		sn:{
-		type:String,
+	sn: {
+		type: String,
 	},
 	name: {
 		type: String,
 		required: [true, 'Name is required'],
 		minlength: [2, 'Name must be at least 2 characters long'],
 	},
-	email:{
-		type: String
+	email: {
+		type: String,
 	},
 	contacts: {
 		type: String,
@@ -24,7 +24,11 @@ const customerSchema = new mongoose.Schema({
 		minlength: [3, 'Address must be at least 3 characters long'],
 	},
 	img: {
-		type:String
+		type: String,
+	},
+	areaCode: {
+		type: String,
+		minlength: [3, 'Area code must be at least 3 characters long']
 	},
 	invoices: [
 		{
@@ -33,9 +37,8 @@ const customerSchema = new mongoose.Schema({
 	],
 	activity_log: {
 		type: [activityLogSchema],
-		required: false
+		required: false,
 	},
-
 });
 
 module.exports =
