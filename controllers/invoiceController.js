@@ -398,9 +398,18 @@ const generatePDF = (invoice) => {
 
 // Search Invoices
 const searchInvoices = async (req, res) => {
-	const { startDate, endDate, customer } = req.query;
-	const page = parseInt(req.query.page, 10) || 1;
-	const limit = parseInt(req.query.limit, 10) || 10;
+	const { page = 1, limit = 10, search, startDate, endDate, status } = req.query;
+
+	// Input validation
+	const pageNum = parseInt(page, 10) || 1;
+	const limitNum = Math.min(parseInt(limit, 10) || 10, 100); // Cap limit at 100
+
+	if (pageNum < 1) {
+		return res.status(400).json({
+			success: false,
+			message: 'Page number must be positive',
+		});
+	}
 
 	try {
 		const queryObject = {};
@@ -409,70 +418,78 @@ const searchInvoices = async (req, res) => {
 		if (startDate || endDate) {
 			queryObject.createdAt = {};
 			if (startDate) {
-				queryObject.createdAt.$gte = new Date(startDate);
+				const start = new Date(startDate);
+				if (isNaN(start)) throw new Error('Invalid start date');
+				queryObject.createdAt.$gte = start;
 			}
 			if (endDate) {
-				// Set endDate to end of day
-				const endOfDay = new Date(endDate);
-				endOfDay.setHours(23, 59, 59, 999);
-				queryObject.createdAt.$lte = endOfDay;
+				const end = new Date(endDate);
+				if (isNaN(end)) throw new Error('Invalid end date');
+				end.setHours(23, 59, 59, 999);
+				queryObject.createdAt.$lte = end;
 			}
 		}
 
-		// If customer search is provided, first find matching customers
-		if (customer) {
-			const matchingCustomers = await Customer.find({
-				name: { $regex: customer, $options: 'i' }
-			}).select('_id');
-			
-			const customerIds = matchingCustomers.map(c => c._id.toString());
+		if(status){
+			queryObject.status = {};
+			queryObject.status = status
+		}
+
+		// Add search filters (case-insensitive)
+		if (search) {
+			const customerQuery = { name: { $regex: search, $options: 'i' } };
+			const matchingCustomers = await Customer.find(customerQuery)
+				.select('_id')
+				.lean(); // Use lean() for better performance
+
+			const customerIds = matchingCustomers.map((c) => c._id);
+
+			queryObject.$or = [
+				{ sn: { $regex: search, $options: 'i' } },
+				// { status: { $regex: status, $options: 'i' } },
+			];
+
 			if (customerIds.length > 0) {
-				queryObject.customer = { $in: customerIds };
-			} else {
-				// If no matching customers found, return empty result
-				return res.status(200).json({
-					success: true,
-					body: [],
-					total: 0,
-					page: Number(page),
-					totalPages: 0,
-					hasMore: false,
-					filters: {
-						dateRange: startDate || endDate ? { startDate, endDate } : null,
-						customer: customer || null
-					}
-				});
+				queryObject.$or.push({ customer: { $in: customerIds } });
 			}
 		}
 
-		// Execute search query with customer population
-		const invoices = await Invoice.find(queryObject)
-			.sort({ createdAt: -1 })
-			.skip((page - 1) * limit)
-			.limit(Number(limit))
-			.populate('user', 'username email')
-			.populate('customer', 'name email contacts address'); // Populate customer details
+		// Execute queries concurrently for better performance
+		const [invoices, totalInvoices] = await Promise.all([
+			Invoice.find(queryObject)
+				.sort({ createdAt: -1 })
+				.skip((pageNum - 1) * limitNum)
+				.limit(limitNum)
+				.populate({
+					path: 'user',
+					select: 'username email',
+				})
+				.populate({
+					path: 'customer',
+					select: 'name email contacts address',
+				})
+				.lean(), // Use lean() for better performance
+			Invoice.countDocuments(queryObject),
+		]);
 
-		const totalInvoices = await Invoice.countDocuments(queryObject);
-
-		res.status(200).json({
+		return res.status(200).json({
 			success: true,
 			body: invoices,
 			total: totalInvoices,
-			page: Number(page),
-			totalPages: Math.ceil(totalInvoices / limit),
-			hasMore: page * limit < totalInvoices,
+			page: pageNum,
+			totalPages: Math.ceil(totalInvoices / limitNum),
+			hasMore: pageNum * limitNum < totalInvoices,
 			filters: {
+				search: search || null,
 				dateRange: startDate || endDate ? { startDate, endDate } : null,
-				customer: customer || null
-			}
+			},
 		});
 	} catch (error) {
 		console.error('Error searching invoices:', error);
-		res.status(500).json({
+		return res.status(500).json({
 			success: false,
 			message: 'Error searching invoices',
-			error: error.message
+			error: error.message,
 		});
 	}
 };
